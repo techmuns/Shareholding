@@ -100,6 +100,7 @@ src/
 | `npm run cf-typegen`| Generate Worker binding types (`wrangler types`)    |
 | `npm run typecheck` | Type-check all projects (`tsc -b`)                  |
 | `npm run lint`      | Lint with ESLint                                    |
+| `npm run check`     | Pre-push gate: lint → typecheck → build → `wrangler deploy --dry-run` |
 
 ## Local development
 
@@ -127,19 +128,34 @@ The Worker injects it as `Authorization: Bearer <token>` and adds the fixed
 
 ## Cloudflare Workers deployment settings
 
-| Setting       | Value                       |
-| ------------- | --------------------------- |
-| Project type  | **Workers** (not Pages)     |
-| Install       | `npm ci`                    |
-| Build command | `npm run build`             |
-| Deploy command| `npx wrangler deploy`       |
-| Node version  | 20 or 22                    |
+Deploy via **Cloudflare Workers Builds** (Workers & Pages → the Worker → Settings →
+Builds), or from a machine with `npx wrangler deploy`. The `@cloudflare/vite-plugin`
+emits the deploy-ready Worker config to `dist/shareholding/wrangler.json` during
+`build`; `wrangler deploy` picks it up automatically.
 
-After the first deploy, set the secret once:
+| Setting            | Value                              |
+| ------------------ | ---------------------------------- |
+| Project type       | **Workers** (not Pages)            |
+| Install command    | `npm ci`                           |
+| Build command      | `npm run build`                    |
+| Deploy command     | `npx wrangler deploy`              |
+| Build output dir   | _(leave blank)_ — Wrangler resolves assets from `wrangler.jsonc` (`./dist/client`) |
+| Node version       | 20 or 22                           |
+
+`wrangler.jsonc` is already configured: `name: "shareholding"`, `main:
+"./src/worker/index.ts"`, a current `compatibility_date`, `compatibility_flags:
+["nodejs_compat"]`, and the `assets` block (`./dist/client`, `binding: "ASSETS"`,
+`not_found_handling: "single-page-application"`). Verify locally with
+`npm run check` (runs the dry-run).
+
+After the first deploy, set the secret once (enables the company picker):
 
 ```bash
 wrangler secret put MUNS_ACCESS_TOKEN
 ```
+
+No secret values live in the repo. `.dev.vars` is git-ignored; only
+`.dev.vars.example` (empty placeholder) is committed.
 
 ## API
 
@@ -185,3 +201,21 @@ Non-Indian (non-BSE) companies resolve to `not_found`, which the UI renders as a
 clean "not available" empty state.
 
 Non-`/api` routes are served by the SPA (Static Assets fallback).
+
+## Data sources & known limitations
+
+- **BSE shareholding pattern, individual holders, and insider (SEBI PIT Reg 7(2))**
+  are fetched **server-side in the Worker** with browser-like headers, because
+  BSE returns 403 to plain server requests. This avoids CORS and keeps the flow
+  reliable. All normalizers are pure and never throw — malformed upstream rows
+  degrade to safe defaults (no `NaN%`), so odd/interim quarters and missing
+  category rows render cleanly.
+- **NSE insider is best-effort only.** NSE's Akamai bot manager typically blocks
+  datacenter / Cloudflare egress IPs even with the cookie handshake, so in
+  practice **BSE carries the insider data** and each card's source line shows the
+  feed that actually responded (e.g. "NSE unavailable — BSE provided the data").
+- **Coverage is BSE-listed Indian companies.** Non-Indian tickers surface the
+  clean "not available" state, not an error.
+- **Disclosure thresholds are BSE's:** individual public/institutional holders
+  are disclosed only above 1% of total shares; promoter-group entities are listed
+  in full. Insider disclosures cover a rolling ~12-month window.

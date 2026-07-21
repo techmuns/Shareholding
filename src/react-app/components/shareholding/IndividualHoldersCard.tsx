@@ -127,22 +127,32 @@ function HoldersTable({
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={{ ...th, textAlign: "left", width: "42%" }}>Holder</th>
-            <th
-              style={{ ...th, cursor: "pointer", userSelect: "none" }}
-              onClick={() => setDesc((d) => !d)}
-              title="Sort by % holding"
-            >
-              <span
-                style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#4338ca" }}
+            <th scope="col" style={{ ...th, textAlign: "left", width: "42%" }}>
+              Holder
+            </th>
+            <th scope="col" style={th} aria-sort={desc ? "descending" : "ascending"}>
+              <button
+                type="button"
+                className="th-sort"
+                style={{ marginLeft: "auto" }}
+                onClick={() => setDesc((d) => !d)}
+                title="Sort by % holding"
               >
                 % Holding
                 {desc ? <ArrowDown size={11} /> : <ArrowUp size={11} />}
-              </span>
+              </button>
             </th>
-            <th style={th}>Shares</th>
-            {showPledge && <th style={th}>Pledged</th>}
-            <th style={{ ...th, textAlign: "left" }}>Category</th>
+            <th scope="col" style={th}>
+              Shares
+            </th>
+            {showPledge && (
+              <th scope="col" style={th}>
+                Pledged
+              </th>
+            )}
+            <th scope="col" style={{ ...th, textAlign: "left" }}>
+              Category
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -184,7 +194,7 @@ export function IndividualHoldersCard({ state }: { state: HoldersState }) {
     <WidgetCard
       title="Individual Holders"
       subtitle="Named promoter, FII/FPI, DII & public holders (BSE)"
-      style={{ gridColumn: "span 2" }}
+      wide
     >
       <HoldersStateGate state={state} loadingRows={6}>
         {(holders) => {

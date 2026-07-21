@@ -39,28 +39,54 @@ export async function resolveScrip(
   input: ResolveInput,
   signal: AbortSignal | null,
 ): Promise<ResolveOutcome> {
-  const term = (input.name || input.query || input.ticker).trim();
-  const cacheKey = `${term}|${input.ticker}`.toLowerCase();
+  const primary = (input.name || input.query || input.ticker).trim();
+  const cacheKey = `${primary}|${input.ticker}`.toLowerCase();
 
   const cached = resolveCache.get(cacheKey);
   if (cached) return { ok: true, ...cached };
 
-  const res = await bseFetch(
-    `${BSE_API_BASE}/PeerSmartSearch/w?Type=SS&text=${encodeURIComponent(term)}`,
-    signal,
-  );
-  if (!res.ok) return { ok: false, code: res.code };
+  // Candidate search terms, tried in order until one yields a match. BSE's
+  // PeerSmartSearch is finicky — e.g. it returns "No Match Found" for names
+  // containing "&" (like "Oil & Natural Gas...") that resolve fine by ticker —
+  // so we fall back to the ticker and a de-ampersanded name.
+  const candidates: string[] = [];
+  const addCandidate = (t: string | undefined) => {
+    const s = (t ?? "").trim();
+    if (s.length >= 2 && !candidates.some((c) => c.toLowerCase() === s.toLowerCase())) {
+      candidates.push(s);
+    }
+  };
+  addCandidate(input.name);
+  addCandidate(input.ticker);
+  addCandidate(input.query);
+  if (input.name.includes("&")) addCandidate(input.name.replace(/&/g, " and "));
 
-  const best = pickBestMatch(parsePeerSearch(res.text), {
-    name: input.name,
-    ticker: input.ticker,
-    query: term,
-  });
-  if (!best) return { ok: false, code: "not_found" };
+  let transportError: ResolveOutcome | null = null;
 
-  const resolved = { scripCode: best.scripCode, bseName: best.name };
-  resolveCache.set(cacheKey, resolved);
-  return { ok: true, ...resolved };
+  for (const term of candidates) {
+    const res = await bseFetch(
+      `${BSE_API_BASE}/PeerSmartSearch/w?Type=SS&text=${encodeURIComponent(term)}`,
+      signal,
+    );
+    if (!res.ok) {
+      // A transport failure isn't fatal on its own — try the next candidate.
+      transportError = { ok: false, code: res.code };
+      continue;
+    }
+    const best = pickBestMatch(parsePeerSearch(res.text), {
+      name: input.name,
+      ticker: input.ticker,
+      query: input.query || primary,
+    });
+    if (best) {
+      const resolved = { scripCode: best.scripCode, bseName: best.name };
+      resolveCache.set(cacheKey, resolved);
+      return { ok: true, ...resolved };
+    }
+  }
+
+  // No candidate matched: surface a transport error if we hit one, else not_found.
+  return transportError ?? { ok: false, code: "not_found" };
 }
 
 export const bseResolveRoute: Handler = async (c) => {

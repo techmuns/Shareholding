@@ -7,14 +7,16 @@ interface WidgetCardProps {
   children: ReactNode;
   /** Optional extra style on the card outer element (e.g. gridColumn span). */
   style?: CSSProperties;
+  /** Span two grid columns on wide screens, collapsing to one when narrow. */
+  wide?: boolean;
   /** Optional element rendered at the right of the header (badge, action). */
   headerRight?: ReactNode;
 }
 
-export function WidgetCard({ title, subtitle, children, style, headerRight }: WidgetCardProps) {
+export function WidgetCard({ title, subtitle, children, style, wide, headerRight }: WidgetCardProps) {
   return (
     <div
-      className="widget-card"
+      className={wide ? "widget-card dash-wide" : "widget-card"}
       style={{
         background: "rgba(255, 255, 255, 0.9)",
         border: "1px solid rgba(229, 231, 235, 0.8)",

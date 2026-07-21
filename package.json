@@ -10,7 +10,8 @@
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types",
     "typecheck": "tsc -b",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "check": "npm run lint && npm run typecheck && npm run build && wrangler deploy --dry-run"
   },
   "dependencies": {
     "clsx": "^2.1.1",

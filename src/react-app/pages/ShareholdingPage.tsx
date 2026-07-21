@@ -39,13 +39,7 @@ export default function ShareholdingPage() {
         </p>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 20,
-          gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
-        }}
-      >
+      <div className="dash-grid">
         <ShareholdingSummaryCard state={patternState} />
         <ShareholdingTrendCard state={patternState} />
         <IndividualHoldersCard state={holdersState} />

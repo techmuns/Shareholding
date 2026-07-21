@@ -122,9 +122,11 @@ export default function CompanySelectPage() {
             />
             <input
               ref={inputRef}
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g. RELIANCE or Reliance Industries"
+              aria-label="Search for a company by name or ticker"
               autoFocus
               style={{
                 width: "100%",
@@ -133,7 +135,6 @@ export default function CompanySelectPage() {
                 color: "#111827",
                 border: "1px solid rgba(229,231,235,0.9)",
                 borderRadius: 10,
-                outline: "none",
                 background: "#ffffff",
               }}
             />

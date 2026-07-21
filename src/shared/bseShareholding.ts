@@ -69,8 +69,12 @@ export function parsePeerSearch(raw: unknown): BseSuggestion[] {
     let symbol = "";
     const span = /<span>([\s\S]*?)<\/span>/i.exec(chunk);
     if (span) {
+      // Strip highlight tags to EMPTY (not space): BSE wraps the matched
+      // substring in <strong> (e.g. "<strong>AAPL</strong>USTRAD"), and turning
+      // tags into spaces would split the symbol "AAPLUSTRAD" -> "AAPL USTRAD"
+      // and mis-read the symbol as the search term. Field separators are &nbsp;.
       const text = span[1]
-        .replace(/<[^>]+>/g, " ")
+        .replace(/<[^>]+>/g, "")
         .replace(/&nbsp;/gi, " ")
         .replace(/\s+/g, " ")
         .trim();

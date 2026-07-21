@@ -113,37 +113,56 @@ function DisclosuresTable({ trades }: { trades: InsiderTrade[] }) {
     borderBottom: "1px solid rgba(229,231,235,0.6)",
     whiteSpace: "nowrap",
   };
-  const sortable = (key: SortKey, node: ReactNodeLike) => (
-    <span
+  const sortBtn = (key: SortKey, label: string, align: "left" | "right") => (
+    <button
+      type="button"
+      className="th-sort"
       onClick={() => toggle(key)}
+      title={`Sort by ${label.toLowerCase()}`}
       style={{
-        cursor: "pointer",
-        userSelect: "none",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 3,
         color: sortKey === key ? "#4338ca" : "#6b7280",
+        marginLeft: align === "right" ? "auto" : undefined,
       }}
     >
-      {node}
+      {label}
       {sortKey === key && (desc ? <ArrowDown size={11} /> : <ArrowUp size={11} />)}
-    </span>
+    </button>
   );
+  const ariaSort = (key: SortKey): "ascending" | "descending" | undefined =>
+    sortKey === key ? (desc ? "descending" : "ascending") : undefined;
 
   return (
     <div style={{ maxHeight: 360, overflow: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={{ ...th, textAlign: "left" }}>{sortable("date", "Date")}</th>
-            <th style={{ ...th, textAlign: "left", width: "22%" }}>Person</th>
-            <th style={{ ...th, textAlign: "left" }}>Category</th>
-            <th style={{ ...th, textAlign: "left" }}>Type</th>
-            <th style={th}>{sortable("quantity", "Quantity")}</th>
-            <th style={th}>Value</th>
-            <th style={th}>Holding After</th>
-            <th style={{ ...th, textAlign: "left" }}>Mode</th>
-            <th style={{ ...th, textAlign: "left" }}>Source</th>
+            <th scope="col" style={{ ...th, textAlign: "left" }} aria-sort={ariaSort("date")}>
+              {sortBtn("date", "Date", "left")}
+            </th>
+            <th scope="col" style={{ ...th, textAlign: "left", width: "22%" }}>
+              Person
+            </th>
+            <th scope="col" style={{ ...th, textAlign: "left" }}>
+              Category
+            </th>
+            <th scope="col" style={{ ...th, textAlign: "left" }}>
+              Type
+            </th>
+            <th scope="col" style={th} aria-sort={ariaSort("quantity")}>
+              {sortBtn("quantity", "Quantity", "right")}
+            </th>
+            <th scope="col" style={th}>
+              Value
+            </th>
+            <th scope="col" style={th}>
+              Holding After
+            </th>
+            <th scope="col" style={{ ...th, textAlign: "left" }}>
+              Mode
+            </th>
+            <th scope="col" style={{ ...th, textAlign: "left" }}>
+              Source
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -187,14 +206,12 @@ function DisclosuresTable({ trades }: { trades: InsiderTrade[] }) {
   );
 }
 
-type ReactNodeLike = string | React.ReactElement;
-
 export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
   return (
     <WidgetCard
       title="Insider Trading Disclosures"
       subtitle="SEBI PIT Reg 7(2) · last 12 months"
-      style={{ gridColumn: "span 2" }}
+      wide
     >
       <InsiderStateGate state={state} loadingRows={6}>
         {(insider) => {
