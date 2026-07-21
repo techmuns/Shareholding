@@ -1,21 +1,25 @@
 // Shareholding dashboard.
 //
-// The "Shareholding Summary", "Promoter / FII / DII Trend" and "Individual
-// Holders" cards are wired to BSE-backed data. "Insider Trading Disclosures"
-// remains a placeholder for a later session.
+// All four cards are wired to live data: "Shareholding Summary", "Promoter / FII
+// / DII Trend" and "Individual Holders" from BSE shareholding-pattern feeds, and
+// "Insider Trading Disclosures" from SEBI PIT Reg 7(2) feeds (NSE primary, BSE
+// fallback).
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText } from "lucide-react";
 import { useSelectedCompany } from "@/state/selected-company";
-import { getShareholdingHolders, getShareholdingPattern } from "@/lib/api";
-import { WidgetCard } from "@/components/ui/WidgetCard";
-import { EmptyState } from "@/components/ui/states";
+import {
+  getInsiderDisclosures,
+  getShareholdingHolders,
+  getShareholdingPattern,
+} from "@/lib/api";
 import { ShareholdingSummaryCard } from "@/components/shareholding/ShareholdingSummaryCard";
 import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTrendCard";
 import { IndividualHoldersCard } from "@/components/shareholding/IndividualHoldersCard";
+import { InsiderDisclosuresCard } from "@/components/shareholding/InsiderDisclosuresCard";
 import {
   isIndiaCountry,
   type HoldersState,
+  type InsiderState,
   type PatternState,
 } from "@/components/shareholding/common";
 
@@ -24,6 +28,7 @@ export default function ShareholdingPage() {
   const navigate = useNavigate();
   const [patternState, setPatternState] = useState<PatternState>({ status: "loading" });
   const [holdersState, setHoldersState] = useState<HoldersState>({ status: "loading" });
+  const [insiderState, setInsiderState] = useState<InsiderState>({ status: "loading" });
 
   // No company selected — return to the selector home screen.
   useEffect(() => {
@@ -41,11 +46,13 @@ export default function ShareholdingPage() {
     if (company.country && !isIndiaCountry(company.country)) {
       setPatternState({ status: "unavailable" });
       setHoldersState({ status: "unavailable" });
+      setInsiderState({ status: "unavailable" });
       return;
     }
 
     setPatternState({ status: "loading" });
     setHoldersState({ status: "loading" });
+    setInsiderState({ status: "loading" });
     const controller = new AbortController();
     const req = { query: company.name || company.ticker, ticker: company.ticker, name: company.name };
 
@@ -68,6 +75,21 @@ export default function ShareholdingPage() {
         if (res.ok) setHoldersState({ status: "done", holders: res });
         else if (res.code === "not_found") setHoldersState({ status: "unavailable" });
         else setHoldersState({ status: "error", message: res.message });
+      } catch {
+        // Aborted (company changed) — ignore.
+      }
+    })();
+
+    (async () => {
+      try {
+        const res = await getInsiderDisclosures(
+          { symbol: company.ticker, name: company.name, query: company.name || company.ticker },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        if (res.ok) setInsiderState({ status: "done", insider: res });
+        else if (res.code === "not_found") setInsiderState({ status: "unavailable" });
+        else setInsiderState({ status: "error", message: res.message });
       } catch {
         // Aborted (company changed) — ignore.
       }
@@ -100,17 +122,7 @@ export default function ShareholdingPage() {
         <ShareholdingSummaryCard state={patternState} />
         <ShareholdingTrendCard state={patternState} />
         <IndividualHoldersCard state={holdersState} />
-
-        <WidgetCard
-          title="Insider Trading Disclosures"
-          subtitle="Recent insider buy / sell filings"
-        >
-          <EmptyState
-            message="Data wiring coming next"
-            hint="This widget will populate once its data source is connected."
-            icon={<FileText size={20} />}
-          />
-        </WidgetCard>
+        <InsiderDisclosuresCard state={insiderState} />
       </div>
     </div>
   );

@@ -2,7 +2,11 @@
 // that renders loading/empty/error uniformly, and the source/freshness line.
 import type { ReactNode } from "react";
 import { Landmark } from "lucide-react";
-import type { HoldersSuccess, ShareholdingPatternSuccess } from "@shared/types";
+import type {
+  HoldersSuccess,
+  InsiderSuccess,
+  ShareholdingPatternSuccess,
+} from "@shared/types";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
 
 /** The non-`done` phases shared by every BSE-backed card. */
@@ -16,6 +20,9 @@ export type PatternState = NonDoneStatus | { status: "done"; pattern: Shareholdi
 
 /** State for the individual-holders card (its own fetch). */
 export type HoldersState = NonDoneStatus | { status: "done"; holders: HoldersSuccess };
+
+/** State for the insider-disclosures card (its own fetch). */
+export type InsiderState = NonDoneStatus | { status: "done"; insider: InsiderSuccess };
 
 /** Treat empty/unknown as India (so we still try); only skip clearly non-Indian. */
 export function isIndiaCountry(country: string): boolean {
@@ -64,6 +71,20 @@ export function HoldersStateGate({
 }) {
   if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
   return <>{children(state.holders)}</>;
+}
+
+/** Same gate, for the insider-disclosures card. */
+export function InsiderStateGate({
+  state,
+  loadingRows = 6,
+  children,
+}: {
+  state: InsiderState;
+  loadingRows?: number;
+  children: (insider: InsiderSuccess) => ReactNode;
+}) {
+  if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
+  return <>{children(state.insider)}</>;
 }
 
 function formatAsOf(iso: string): string {

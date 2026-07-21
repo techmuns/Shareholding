@@ -22,7 +22,8 @@ disclosures.
     recent quarters — wired to BSE.
   - **Individual Holders** — tabbed, sortable tables of named Promoter / FII·FPI /
     DII / Other-Public holders (with promoter pledge %) — wired to BSE.
-  - **Insider Trading Disclosures** — placeholder.
+  - **Insider Trading Disclosures** — sortable table of SEBI PIT Reg 7(2) filings
+    (last 12 months) with buy/sell/pledge chips — wired to NSE (primary) + BSE.
 - **Munshot SDK integration** — a single module-scoped client, a `useHostContext`
   hook, and a `dashboard.capture.snapshot` / `dashboard.capture.visual` handler.
 - **Worker proxies (safe-failure contract, HTTP 200 + `{ ok:false, code, message }`)**:
@@ -34,6 +35,8 @@ disclosures.
     BSE requires; non-Indian companies return a clean `not_found`.
   - `POST /api/shareholding/holders` — named individual holders (promoters,
     FII/FPI, DII, other public) for the latest quarter, with promoter pledge %.
+  - `POST /api/insider/disclosures` — SEBI PIT Reg 7(2) insider-trading
+    disclosures (last ~12 months), merged from NSE (primary) + BSE (fallback).
 
 ## Tech stack
 
@@ -129,6 +132,7 @@ wrangler secret put MUNS_ACCESS_TOKEN
 | POST   | `/api/bse/resolve`          | Body `{ query?, ticker?, name? }` → `{ scripCode, bseName }`.|
 | POST   | `/api/shareholding/pattern` | Body `{ scripCode }` or `{ query/ticker/name }` → pattern.   |
 | POST   | `/api/shareholding/holders` | Body `{ scripCode }` or `{ query/ticker/name }` (+ `qtrId?`) → holders. |
+| POST   | `/api/insider/disclosures`  | Body `{ symbol, scripCode?, name? }` → SEBI PIT Reg 7(2) trades. |
 
 All POST routes use the safe-failure contract (always HTTP 200; success is
 `{ ok:true, ... }`, failures are `{ ok:false, code, message }`).
@@ -147,6 +151,17 @@ The shareholding routes call BSE's public JSON APIs under
   individual public/institutional holders (classified by the section they sit in).
 - `Corp_shpPromoterNGroup_ng/w?SCRIPCODE=&QtrCode=` — named promoter & promoter-
   group entities with shares, % holding and pledge/encumbrance %.
+- `InsiderTrade15/w?fromdt=&todt=&pageno=1&scripcode=<code>` — SEBI PIT 2015
+  (Reg 7(2)) insider-trading disclosures (empty date params return the recent
+  set; the Worker filters to the last 12 months). `InsiderTrade92` is the legacy
+  1992-regime table and is not used.
+
+Insider disclosures also try NSE first —
+`GET https://www.nseindia.com/api/corporate-insider-trading?index=equities&symbol=<SYM>`
+— behind a manual cookie handshake (bootstrap `get-quotes` page → forward
+`set-cookie`). NSE frequently blocks datacenter/Cloudflare egress IPs (Akamai),
+so any NSE failure is a soft miss that falls through to BSE; the card's source
+line reflects whichever feed actually returned rows.
 
 Non-Indian (non-BSE) companies resolve to `not_found`, which the UI renders as a
 clean "not available" empty state.

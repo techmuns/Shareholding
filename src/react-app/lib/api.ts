@@ -2,6 +2,7 @@
 import type {
   BseResolveResponse,
   HoldersResponse,
+  InsiderResponse,
   ShareholdingPatternResponse,
   StockSearchResponse,
 } from "@shared/types";
@@ -109,6 +110,33 @@ export async function getShareholdingHolders(
       ok: false,
       code: "provider_error",
       message: "Could not reach BSE. Please try again.",
+    };
+  }
+}
+
+/**
+ * POST /api/insider/disclosures — SEBI PIT Reg 7(2) insider-trading disclosures
+ * (NSE primary, BSE fallback) for the last ~12 months. Accepts the NSE symbol,
+ * a scrip code, and/or a company name.
+ */
+export async function getInsiderDisclosures(
+  input: { symbol?: string; scripCode?: string; name?: string; ticker?: string; query?: string },
+  signal?: AbortSignal,
+): Promise<InsiderResponse> {
+  try {
+    const res = await fetch("/api/insider/disclosures", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal,
+    });
+    return (await res.json()) as InsiderResponse;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return {
+      ok: false,
+      code: "provider_error",
+      message: "Could not reach the disclosures service. Please try again.",
     };
   }
 }

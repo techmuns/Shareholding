@@ -136,3 +136,44 @@ export type HoldersSuccess = { ok: true } & HoldersBreakdown;
 
 /** `POST /api/shareholding/holders` response. */
 export type HoldersResponse = HoldersSuccess | BseFailure;
+
+// ---------------------------------------------------------------------------
+// Insider trading disclosures — SEBI PIT Reg 7(2) (added this session)
+// ---------------------------------------------------------------------------
+
+export type InsiderSource = "NSE" | "BSE";
+
+export type InsiderTxnType = "buy" | "sell" | "pledge" | "revoke" | "other";
+
+/** A single insider-trading disclosure row, normalized across exchanges. */
+export interface InsiderTrade {
+  personName: string;
+  personCategory?: string; // Promoter / Director / KMP / Designated Person …
+  transactionType: InsiderTxnType; // mapped from the exchange's raw type/mode
+  securityType?: string;
+  quantity: number;
+  value?: number; // INR
+  sharesAfterPct?: number;
+  mode?: string; // market / off-market / ESOP / pledge / gift
+  periodFrom?: string;
+  periodTo?: string;
+  disclosureDate: string; // ISO date if parseable, else raw
+  source: InsiderSource;
+}
+
+export interface InsiderDisclosures {
+  symbol: string;
+  scripCode?: string;
+  companyName: string;
+  asOf: string; // ISO fetch timestamp
+  windowFrom: string; // ISO date
+  windowTo: string; // ISO date
+  trades: InsiderTrade[]; // newest disclosureDate first
+  sources: InsiderSource[]; // which feeds actually contributed rows
+  note: string; // "SEBI PIT Reg 7(2) disclosures"
+}
+
+export type InsiderSuccess = { ok: true } & InsiderDisclosures;
+
+/** `POST /api/insider/disclosures` response. */
+export type InsiderResponse = InsiderSuccess | BseFailure;
