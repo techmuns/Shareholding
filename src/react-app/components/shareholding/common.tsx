@@ -36,8 +36,8 @@ function NonDoneView({ state, loadingRows }: { state: NonDoneStatus; loadingRows
   if (state.status === "unavailable") {
     return (
       <EmptyState
-        message="BSE shareholding data is not available for this company."
-        hint="BSE coverage is limited to Indian (BSE-listed) companies."
+        message="Shareholding data isn't available for this company."
+        hint="This dashboard reads from BSE's main board. NSE-only or NSE SME (Emerge) listings, some recent IPOs, and non-Indian tickers aren't covered."
         icon={<Landmark size={20} />}
       />
     );
