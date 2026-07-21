@@ -174,12 +174,49 @@ const MONTHS: Record<string, string> = {
   DECEMBER: "Dec",
 };
 
-/** Shorten "June 2026" -> "Jun 2026"; pass through anything unexpected. */
+const MONTH_BY_NUM = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function shortMonth(name: string): string {
+  return MONTHS[name.toUpperCase()] ?? name.slice(0, 3);
+}
+
+/**
+ * Normalize BSE quarter labels to a clean, consistent form. Handles the standard
+ * quarter-ends ("June 2026" -> "Jun 2026"), interim date-style labels
+ * ("04 Dec 2025" -> "4 Dec 2025"), and ISO dates ("2025-12-04" -> "4 Dec 2025").
+ * Falls back to the raw string when unparseable — never emits a broken partial.
+ */
 export function shortQuarterLabel(qtr: string): string {
-  const m = /^([A-Za-z]+)\s+(\d{4})$/.exec(qtr.trim());
-  if (!m) return qtr.trim();
-  const short = MONTHS[m[1].toUpperCase()] ?? m[1].slice(0, 3);
-  return `${short} ${m[2]}`;
+  const s = qtr.trim();
+  if (!s) return s;
+
+  // "Month YYYY"
+  let m = /^([A-Za-z]+)\s+(\d{4})$/.exec(s);
+  if (m) return `${shortMonth(m[1])} ${m[2]}`;
+
+  // "DD Month YYYY" (interim / revised filing)
+  m = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(s);
+  if (m) return `${Number(m[1])} ${shortMonth(m[2])} ${m[3]}`;
+
+  // ISO "YYYY-MM-DD"
+  m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) {
+    const mon = MONTH_BY_NUM[Number(m[2])];
+    if (mon) return `${Number(m[3])} ${mon} ${m[1]}`;
+  }
+
+  return s;
+}
+
+/**
+ * Split a quarter label into two-line axis-tick parts: [primary, year]. The year
+ * is the trailing token; everything before it is the primary line. Works for
+ * both "Jun 2026" -> ["Jun","2026"] and "4 Dec 2025" -> ["4 Dec","2025"].
+ */
+export function quarterAxisParts(label: string): [string, string] {
+  const parts = label.trim().split(/\s+/);
+  if (parts.length <= 1) return [label.trim(), ""];
+  return [parts.slice(0, -1).join(" "), parts[parts.length - 1]];
 }
 
 /** Format a BSE numeric quarter id (e.g. 130 / "130.0") as "130.00". */

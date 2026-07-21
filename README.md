@@ -24,6 +24,24 @@ disclosures.
     DII / Other-Public holders (with promoter pledge %) — wired to BSE.
   - **Insider Trading Disclosures** — sortable table of SEBI PIT Reg 7(2) filings
     (last 12 months) with buy/sell/pledge chips — wired to NSE (primary) + BSE.
+- **Embeddability & polish** (works standalone or embedded in Munshot):
+  - **Host-context auto-select** — when the host supplies a selected ticker via the
+    SDK, the dashboard auto-selects that company and loads all four cards
+    (skipping the picker), and reacts to host ticker changes without a refresh.
+    The manual picker is the fallback; a user "Change" override sticks until the
+    host pushes a new ticker. Each selection publishes `shareholding.company.select`.
+  - **Header actions** — **Refresh** (re-fetches all cards; keeps prior data
+    visible with a spinner rather than blanking) and **Export** (downloads the
+    current company's data as a single, sectioned CSV — Summary, Trend, Holders,
+    Insider — stamped with company/quarter/as-of).
+  - **Live snapshot handler** — `dashboard.capture.snapshot` returns the current
+    `{ context, selection, data }` (loaded sections only); `dashboard.capture.visual`
+    captures Zone 2 as a Blob.
+  - **Data Sources & Freshness footer** — one card summarizing provenance +
+    last-refreshed for every card, reflecting the real feeds (e.g. "NSE
+    unavailable — BSE provided the data" for insider).
+  - **Partial-data resilience** — the four cards fetch independently; one failing
+    shows only its own error state and never blanks the others.
 - **Munshot SDK integration** — a single module-scoped client, a `useHostContext`
   hook, and a `dashboard.capture.snapshot` / `dashboard.capture.visual` handler.
 - **Worker proxies (safe-failure contract, HTTP 200 + `{ ok:false, code, message }`)**:

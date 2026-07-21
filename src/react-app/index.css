@@ -70,3 +70,14 @@ body {
   border-color: rgba(79, 70, 229, 0.35);
   background: #f5f3ff;
 }
+
+/* Refresh icon spinner. */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}

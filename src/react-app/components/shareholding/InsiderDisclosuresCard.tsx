@@ -1,10 +1,11 @@
 // "Insider Trading Disclosures" card — SEBI PIT Reg 7(2) disclosures (NSE primary,
 // BSE fallback) for the last ~12 months, as a sortable detail table.
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArrowDown, ArrowUp, Inbox } from "lucide-react";
 import type { InsiderTrade, InsiderTxnType } from "@shared/types";
 import { WidgetCard } from "@/components/ui/WidgetCard";
-import { InsiderStateGate, type InsiderState } from "./common";
+import { InsiderStateGate, SourceLine, type InsiderState } from "./common";
+import { useDashboardData } from "@/state/dashboard-data";
 
 const TYPE_STYLE: Record<InsiderTxnType, { label: string; color: string; bg: string }> = {
   buy: { label: "BUY", color: "#059669", bg: "#ecfdf5" },
@@ -69,8 +70,10 @@ function Kpi({ label, value }: { label: string; value: string }) {
 }
 
 function DisclosuresTable({ trades }: { trades: InsiderTrade[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>("date");
-  const [desc, setDesc] = useState(true);
+  // Sort state lives in the shared store so the snapshot handler can report it.
+  const { insiderSort, setInsiderSort } = useDashboardData();
+  const sortKey = insiderSort.key;
+  const desc = insiderSort.desc;
 
   const rows = useMemo(() => {
     const copy = [...trades];
@@ -85,11 +88,8 @@ function DisclosuresTable({ trades }: { trades: InsiderTrade[] }) {
   }, [trades, sortKey, desc]);
 
   const toggle = (key: SortKey) => {
-    if (key === sortKey) setDesc((d) => !d);
-    else {
-      setSortKey(key);
-      setDesc(true);
-    }
+    if (key === sortKey) setInsiderSort({ key, desc: !desc });
+    else setInsiderSort({ key, desc: true });
   };
 
   const th: React.CSSProperties = {
@@ -201,10 +201,10 @@ export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
           const { trades } = insider;
           const buys = trades.filter((t) => t.transactionType === "buy").length;
           const sells = trades.filter((t) => t.transactionType === "sell").length;
-          const sourceText =
+          const sourceLabel =
             insider.sources.length > 0
-              ? `Source: ${insider.sources.join(" + ")}`
-              : "Sources checked: NSE, BSE";
+              ? insider.sources.join(" · ")
+              : "NSE · BSE (none returned)";
 
           return (
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -253,17 +253,12 @@ export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
                 </>
               )}
 
-              <div
-                style={{
-                  padding: "8px 16px",
-                  borderTop: "1px solid rgba(229,231,235,0.8)",
-                  fontSize: 11,
-                  color: "#9ca3af",
-                }}
-              >
-                Window: {insider.windowFrom} – {insider.windowTo} · {sourceText} (
-                {insider.note})
-              </div>
+              <SourceLine
+                source={sourceLabel}
+                context={`Window ${insider.windowFrom} – ${insider.windowTo}`}
+                asOf={insider.asOf}
+                note={insider.note}
+              />
             </div>
           );
         }}

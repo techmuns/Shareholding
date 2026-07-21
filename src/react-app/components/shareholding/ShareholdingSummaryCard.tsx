@@ -90,7 +90,12 @@ export function ShareholdingSummaryCard({ state }: { state: PatternState }) {
                   </div>
                 ))}
               </div>
-              <SourceLine asOf={pattern.asOf} partial={pattern.partial} />
+              <SourceLine
+                source="BSE India"
+                context={`As of ${latest.qtrLabel}`}
+                asOf={pattern.asOf}
+                warn={pattern.partial ? "Some figures may be partial" : undefined}
+              />
             </div>
           );
         }}

@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import type { HolderCategory, IndividualHolder } from "@shared/types";
 import { WidgetCard } from "@/components/ui/WidgetCard";
 import { HoldersStateGate, SourceLine, type HoldersState } from "./common";
+import { useDashboardData } from "@/state/dashboard-data";
 
 interface GroupDef {
   key: HolderCategory;
@@ -177,7 +178,7 @@ function HoldersTable({
 }
 
 export function IndividualHoldersCard({ state }: { state: HoldersState }) {
-  const [active, setActive] = useState<HolderCategory>("promoter");
+  const { holdersTab: active, setHoldersTab: setActive } = useDashboardData();
 
   return (
     <WidgetCard
@@ -242,7 +243,11 @@ export function IndividualHoldersCard({ state }: { state: HoldersState }) {
               <div style={{ padding: "8px 16px 0", fontSize: 11, color: "#9ca3af" }}>
                 {holders.disclosureNote}
               </div>
-              <SourceLine asOf={holders.asOf} />
+              <SourceLine
+                source="BSE India"
+                context={`As of ${holders.qtrLabel}`}
+                asOf={holders.asOf}
+              />
             </div>
           );
         }}

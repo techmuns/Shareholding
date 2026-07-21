@@ -87,7 +87,7 @@ export function InsiderStateGate({
   return <>{children(state.insider)}</>;
 }
 
-function formatAsOf(iso: string): string {
+export function formatAsOf(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString(undefined, {
@@ -99,9 +99,28 @@ function formatAsOf(iso: string): string {
   });
 }
 
-/** "As of <timestamp> · Source: BSE India" — meets the source/freshness standard. */
-export function SourceLine({ asOf, partial }: { asOf: string; partial?: boolean }) {
+/**
+ * The single provenance/freshness line reused across every data card:
+ * "<context> · Source: <source> · fetched <timestamp>" with an optional neutral
+ * `note` and an optional amber `warn`.
+ */
+export function SourceLine({
+  source,
+  context,
+  asOf,
+  note,
+  warn,
+}: {
+  source: string;
+  context?: string;
+  asOf: string;
+  note?: string;
+  warn?: string;
+}) {
   const when = formatAsOf(asOf);
+  const left = [context, `Source: ${source}`, when ? `fetched ${when}` : "", note]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div
       style={{
@@ -116,8 +135,8 @@ export function SourceLine({ asOf, partial }: { asOf: string; partial?: boolean 
         color: "#9ca3af",
       }}
     >
-      <span>{when ? `As of ${when} · Source: BSE India` : "Source: BSE India"}</span>
-      {partial && <span style={{ color: "#d97706" }}>Some figures may be partial</span>}
+      <span>{left}</span>
+      {warn && <span style={{ color: "#d97706" }}>{warn}</span>}
     </div>
   );
 }

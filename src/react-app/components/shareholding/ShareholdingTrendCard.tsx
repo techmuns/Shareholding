@@ -1,7 +1,7 @@
 // "Promoter / FII / DII Trend" card — a lightweight inline-SVG stacked bar chart
 // across the quarterly trend series. No chart library.
 import type { ShareholdingQuarter } from "@shared/types";
-import { stackRemainderPct } from "@shared/bseShareholding";
+import { quarterAxisParts, stackRemainderPct } from "@shared/bseShareholding";
 import { WidgetCard } from "@/components/ui/WidgetCard";
 import { CardStateGate, SourceLine, type PatternState } from "./common";
 
@@ -97,26 +97,33 @@ function Chart({ trend }: { trend: ShareholdingQuarter[] }) {
                 </rect>
               );
             })}
-            {/* x-axis label: month over year */}
-            <text
-              x={cx}
-              y={PAD.top + PLOT_H + 16}
-              textAnchor="middle"
-              fontSize={9}
-              fontWeight={600}
-              fill="#6b7280"
-            >
-              {q.qtrLabel.split(" ")[0]}
-            </text>
-            <text
-              x={cx}
-              y={PAD.top + PLOT_H + 28}
-              textAnchor="middle"
-              fontSize={8}
-              fill="#9ca3af"
-            >
-              {q.qtrLabel.split(" ")[1]}
-            </text>
+            {/* x-axis label: primary (month or "DD Mon") over year, robustly split */}
+            {(() => {
+              const [primary, year] = quarterAxisParts(q.qtrLabel);
+              return (
+                <>
+                  <text
+                    x={cx}
+                    y={PAD.top + PLOT_H + 16}
+                    textAnchor="middle"
+                    fontSize={9}
+                    fontWeight={600}
+                    fill="#6b7280"
+                  >
+                    {primary}
+                  </text>
+                  <text
+                    x={cx}
+                    y={PAD.top + PLOT_H + 28}
+                    textAnchor="middle"
+                    fontSize={8}
+                    fill="#9ca3af"
+                  >
+                    {year}
+                  </text>
+                </>
+              );
+            })()}
           </g>
         );
       })}
@@ -168,7 +175,12 @@ export function ShareholdingTrendCard({ state }: { state: PatternState }) {
               <div style={{ padding: "8px 12px 4px" }}>
                 <Chart trend={pattern.trend} />
               </div>
-              <SourceLine asOf={pattern.asOf} partial={pattern.partial} />
+              <SourceLine
+                source="BSE India"
+                context={`As of ${pattern.latest.qtrLabel}`}
+                asOf={pattern.asOf}
+                warn={pattern.partial ? "Some figures may be partial" : undefined}
+              />
             </div>
           )
         }
