@@ -1,159 +1,139 @@
-// "Promoter / FII / DII Trend" card — a lightweight inline-SVG stacked bar chart
-// across the quarterly trend series. No chart library.
-import type { ShareholdingQuarter } from "@shared/types";
-import { quarterAxisParts, stackRemainderPct } from "@shared/bseShareholding";
+// "Promoter / FII / DII Trend" card — a detailed quarter-by-quarter table of the
+// ownership composition, each quarter's QoQ change, and the net change across the
+// whole period. (Replaces the earlier stacked-bar chart.)
+import type { ShareholdingCategoryBreakdown, ShareholdingQuarter } from "@shared/types";
+import { stackRemainderPct } from "@shared/bseShareholding";
 import { WidgetCard } from "@/components/ui/WidgetCard";
 import { CardStateGate, SourceLine, type PatternState } from "./common";
 
-// Calm, distinct, design-token-aligned palette (indigo primary + grayscale-ish).
+// Series palette — validated colorblind-safe (matches the summary donut).
 const SERIES = [
-  { key: "promoter", label: "Promoter", color: "#4f46e5" },
-  { key: "dii", label: "DII", color: "#d97706" },
-  { key: "fii", label: "FII / FPI", color: "#0d9488" },
-  { key: "public", label: "Public", color: "#9ca3af" },
+  { key: "promoter", label: "Promoter", color: "#4f46e5", pick: (b: ShareholdingCategoryBreakdown) => b.promoterPct },
+  { key: "fii", label: "FII / FPI", color: "#0d9488", pick: (b: ShareholdingCategoryBreakdown) => b.fiiPct },
+  { key: "dii", label: "DII", color: "#d97706", pick: (b: ShareholdingCategoryBreakdown) => b.diiPct },
+  { key: "public", label: "Public", color: "#9ca3af", pick: stackRemainderPct },
 ] as const;
 
-// Legend order (Promoter / FII / DII / Public) differs from stack order (Promoter
-// at the base, Public on top) — both intentional.
-const LEGEND_ORDER = ["promoter", "fii", "dii", "public"] as const;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-function segmentsFor(q: ShareholdingQuarter): Record<string, number> {
-  const b = q.breakdown;
-  return {
-    promoter: b.promoterPct,
-    dii: b.diiPct,
-    fii: b.fiiPct,
-    public: stackRemainderPct(b), // retail / non-institutional public + other
-  };
-}
-
-// viewBox geometry (scales responsively to the card width).
-const VB_W = 520;
-const VB_H = 260;
-const PAD = { top: 12, right: 12, bottom: 40, left: 34 };
-const PLOT_W = VB_W - PAD.left - PAD.right;
-const PLOT_H = VB_H - PAD.top - PAD.bottom;
-
-function y(pct: number): number {
-  return PAD.top + PLOT_H * (1 - pct / 100);
-}
-
-function Chart({ trend }: { trend: ShareholdingQuarter[] }) {
-  const n = trend.length;
-  const slot = PLOT_W / n;
-  const barW = Math.min(62, slot * 0.6);
-  const colorOf = (key: string) => SERIES.find((s) => s.key === key)?.color ?? "#9ca3af";
-  const gridLines = [0, 25, 50, 75, 100];
-
+/** A signed, colored percentage-point change ("+0.35" / "−0.14" / "—"). */
+function Delta({ value, showUnit = false }: { value: number | null; showUnit?: boolean }) {
+  if (value === null) return <span style={{ color: "#d1d5db" }}>—</span>;
+  const v = round2(value);
+  const flat = Math.abs(v) < 0.005;
+  const up = v > 0;
+  const color = flat ? "#9ca3af" : up ? "#059669" : "#dc2626";
+  const sign = flat ? "±" : up ? "+" : "−";
   return (
-    <svg
-      viewBox={`0 0 ${VB_W} ${VB_H}`}
-      width="100%"
-      role="img"
-      aria-label="Quarterly shareholding composition"
-      style={{ display: "block" }}
-    >
-      {/* gridlines + y labels */}
-      {gridLines.map((g) => (
-        <g key={g}>
-          <line
-            x1={PAD.left}
-            x2={PAD.left + PLOT_W}
-            y1={y(g)}
-            y2={y(g)}
-            stroke="rgba(229,231,235,0.9)"
-            strokeWidth={1}
-          />
-          <text x={PAD.left - 6} y={y(g) + 3} textAnchor="end" fontSize={9} fill="#9ca3af">
-            {g}%
-          </text>
-        </g>
-      ))}
-
-      {/* stacked bars */}
-      {trend.map((q, i) => {
-        const cx = PAD.left + slot * i + slot / 2;
-        const x = cx - barW / 2;
-        const segs = segmentsFor(q);
-        let cursor = 0; // running % from the bottom
-        return (
-          <g key={q.qtrId}>
-            {(["promoter", "dii", "fii", "public"] as const).map((key) => {
-              const val = segs[key];
-              if (val <= 0) return null;
-              const yTop = y(cursor + val);
-              // 2px surface gap between stacked fills (marks spec); soft-rounded.
-              const h = Math.max(1, y(cursor) - yTop - 2);
-              cursor += val;
-              return (
-                <rect
-                  key={key}
-                  x={x}
-                  y={yTop}
-                  width={barW}
-                  height={h}
-                  rx={3}
-                  fill={colorOf(key)}
-                >
-                  <title>{`${q.qtrLabel} · ${SERIES.find((s) => s.key === key)?.label}: ${val.toFixed(2)}%`}</title>
-                </rect>
-              );
-            })}
-            {/* x-axis label: primary (month or "DD Mon") over year, robustly split */}
-            {(() => {
-              const [primary, year] = quarterAxisParts(q.qtrLabel);
-              return (
-                <>
-                  <text
-                    x={cx}
-                    y={PAD.top + PLOT_H + 16}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fontWeight={600}
-                    fill="#6b7280"
-                  >
-                    {primary}
-                  </text>
-                  <text
-                    x={cx}
-                    y={PAD.top + PLOT_H + 28}
-                    textAnchor="middle"
-                    fontSize={8}
-                    fill="#9ca3af"
-                  >
-                    {year}
-                  </text>
-                </>
-              );
-            })()}
-          </g>
-        );
-      })}
-    </svg>
+    <span style={{ color, fontWeight: 600 }}>
+      {sign}
+      {Math.abs(v).toFixed(2)}
+      {showUnit ? " pts" : ""}
+    </span>
   );
 }
 
-function Legend() {
+const thBase: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  background: "rgba(249,250,251,0.98)",
+  backdropFilter: "blur(4px)",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "#6b7280",
+  padding: "9px 14px",
+  borderBottom: "1px solid rgba(229,231,235,0.9)",
+  whiteSpace: "nowrap",
+};
+const tdBase: React.CSSProperties = {
+  padding: "9px 14px",
+  borderBottom: "1px solid rgba(229,231,235,0.6)",
+  whiteSpace: "nowrap",
+  fontVariantNumeric: "tabular-nums",
+};
+
+function ChangeTable({ trend }: { trend: ShareholdingQuarter[] }) {
+  const first = trend[0];
+  const last = trend[trend.length - 1];
+
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: 14,
-        padding: "10px 16px 0",
-      }}
-    >
-      {LEGEND_ORDER.map((key) => {
-        const s = SERIES.find((x) => x.key === key)!;
-        return (
-          <span key={key} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span
-              style={{ width: 10, height: 10, borderRadius: 3, background: s.color }}
-            />
-            <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }}>{s.label}</span>
-          </span>
-        );
-      })}
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th scope="col" style={{ ...thBase, textAlign: "left" }}>
+              Quarter
+            </th>
+            {SERIES.map((s) => (
+              <th key={s.key} scope="col" style={{ ...thBase, textAlign: "right" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color }} />
+                  {s.label}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {trend.map((q, i) => {
+            const prev = i > 0 ? trend[i - 1] : undefined;
+            return (
+              <tr key={q.qtrId}>
+                <td style={{ ...tdBase, textAlign: "left", fontWeight: 600, color: "#374151" }}>
+                  {q.qtrLabel}
+                </td>
+                {SERIES.map((s) => {
+                  const val = s.pick(q.breakdown);
+                  const qoq = prev ? val - s.pick(prev.breakdown) : null;
+                  return (
+                    <td key={s.key} style={{ ...tdBase, textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
+                        {val.toFixed(2)}%
+                      </div>
+                      <div style={{ fontSize: 11, marginTop: 1 }}>
+                        <Delta value={qoq} />
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td
+              style={{
+                ...tdBase,
+                textAlign: "left",
+                borderTop: "2px solid rgba(229,231,235,0.9)",
+                borderBottom: "none",
+                background: "rgba(238,242,255,0.55)",
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#4338ca" }}>Net change</div>
+              <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                {first.qtrLabel} → {last.qtrLabel}
+              </div>
+            </td>
+            {SERIES.map((s) => (
+              <td
+                key={s.key}
+                style={{
+                  ...tdBase,
+                  textAlign: "right",
+                  fontSize: 13,
+                  borderTop: "2px solid rgba(229,231,235,0.9)",
+                  borderBottom: "none",
+                  background: "rgba(238,242,255,0.55)",
+                }}
+              >
+                <Delta value={s.pick(last.breakdown) - s.pick(first.breakdown)} showUnit />
+              </td>
+            ))}
+          </tr>
+        </tfoot>
+      </table>
     </div>
   );
 }
@@ -162,20 +142,22 @@ export function ShareholdingTrendCard({ state }: { state: PatternState }) {
   return (
     <WidgetCard
       title="Promoter / FII / DII Trend"
-      subtitle="Quarter-over-quarter ownership composition (BSE)"
+      subtitle="Quarter-over-quarter composition & change (BSE)"
       className="span-7"
     >
       <CardStateGate state={state} loadingRows={6}>
         {(pattern) =>
           pattern.trend.length === 0 ? (
             <div style={{ padding: 24, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
-              No quarterly history to chart yet.
+              No quarterly history available yet.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <Legend />
-              <div style={{ padding: "8px 12px 4px" }}>
-                <Chart trend={pattern.trend} />
+            <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+              <ChangeTable trend={pattern.trend} />
+              <div style={{ flex: 1 }} />
+              <div style={{ padding: "8px 14px 0", fontSize: 11, color: "#9ca3af" }}>
+                Figures are % of total capital; QoQ = change vs the previous quarter; all
+                changes in percentage points (pts).
               </div>
               <SourceLine
                 source="BSE India"
