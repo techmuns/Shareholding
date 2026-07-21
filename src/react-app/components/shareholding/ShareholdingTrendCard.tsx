@@ -41,7 +41,7 @@ function y(pct: number): number {
 function Chart({ trend }: { trend: ShareholdingQuarter[] }) {
   const n = trend.length;
   const slot = PLOT_W / n;
-  const barW = Math.min(48, slot * 0.6);
+  const barW = Math.min(62, slot * 0.6);
   const colorOf = (key: string) => SERIES.find((s) => s.key === key)?.color ?? "#9ca3af";
   const gridLines = [0, 25, 50, 75, 100];
 
@@ -82,7 +82,8 @@ function Chart({ trend }: { trend: ShareholdingQuarter[] }) {
               const val = segs[key];
               if (val <= 0) return null;
               const yTop = y(cursor + val);
-              const h = Math.max(0, y(cursor) - yTop);
+              // 2px surface gap between stacked fills (marks spec); soft-rounded.
+              const h = Math.max(1, y(cursor) - yTop - 2);
               cursor += val;
               return (
                 <rect
@@ -91,6 +92,7 @@ function Chart({ trend }: { trend: ShareholdingQuarter[] }) {
                   y={yTop}
                   width={barW}
                   height={h}
+                  rx={3}
                   fill={colorOf(key)}
                 >
                   <title>{`${q.qtrLabel} · ${SERIES.find((s) => s.key === key)?.label}: ${val.toFixed(2)}%`}</title>
@@ -161,7 +163,7 @@ export function ShareholdingTrendCard({ state }: { state: PatternState }) {
     <WidgetCard
       title="Promoter / FII / DII Trend"
       subtitle="Quarter-over-quarter ownership composition (BSE)"
-      wide
+      className="span-7"
     >
       <CardStateGate state={state} loadingRows={6}>
         {(pattern) =>

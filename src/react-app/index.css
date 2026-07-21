@@ -89,24 +89,38 @@ body {
   border-radius: 4px;
 }
 
-/* Responsive widget grid. Wide cards span two columns, but collapse to one on
-   narrow screens (so a span-2 card never forces an extra column in an iframe). */
+/* Responsive 12-column dashboard grid, centered with a comfortable max width so
+   ultra-wide host panels get symmetric margins instead of a ragged right gap. */
 .dash-grid {
   display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 20px;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  align-items: stretch;
 }
 
-.dash-grid > .dash-wide {
-  grid-column: span 2;
+.dash-grid > .span-5 {
+  grid-column: span 5;
+}
+.dash-grid > .span-7 {
+  grid-column: span 7;
+}
+.dash-grid > .span-12 {
+  grid-column: 1 / -1;
 }
 
-@media (max-width: 767px) {
+/* Collapse to a single readable column on narrow / mobile iframes. */
+@media (max-width: 1000px) {
   .dash-grid {
     grid-template-columns: 1fr;
+    max-width: 760px;
   }
-  .dash-grid > .dash-wide {
-    grid-column: auto;
+  .dash-grid > .span-5,
+  .dash-grid > .span-7,
+  .dash-grid > .span-12 {
+    grid-column: 1 / -1;
   }
 }
 

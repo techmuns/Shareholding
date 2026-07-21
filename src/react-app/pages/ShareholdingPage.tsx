@@ -29,13 +29,12 @@ export default function ShareholdingPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>
+      <div style={{ width: "100%", maxWidth: 1440, margin: "0 auto" }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#111827", letterSpacing: "-0.01em" }}>
           {company.name || company.ticker}
         </h2>
-        <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6b7280" }}>
-          {[company.sector, company.country].filter(Boolean).join(" · ") ||
-            "Shareholding overview"}
+        <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "#6b7280" }}>
+          {[company.sector, company.country].filter(Boolean).join(" · ") || "Shareholding overview"}
         </p>
       </div>
 

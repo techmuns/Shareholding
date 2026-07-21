@@ -20,7 +20,7 @@ function statusText(status: "loading" | "unavailable" | "error" | "done"): {
   }
 }
 
-function Row({
+function SourceTile({
   title,
   detail,
   status,
@@ -33,21 +33,34 @@ function Row({
   return (
     <div
       style={{
+        border: "1px solid rgba(229,231,235,0.9)",
+        borderRadius: 12,
+        background: "#ffffff",
+        padding: "12px 14px",
         display: "flex",
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        gap: 12,
-        padding: "8px 0",
-        borderBottom: "1px solid rgba(229,231,235,0.6)",
+        flexDirection: "column",
+        gap: 4,
+        minWidth: 0,
       }}
     >
-      <div style={{ minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "#9ca3af" }}>{detail}</div>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            color: s.color,
+            background: `${s.color}14`,
+            border: `1px solid ${s.color}33`,
+            borderRadius: 6,
+            padding: "1px 7px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {s.label}
+        </span>
       </div>
-      <span style={{ fontSize: 11, fontWeight: 600, color: s.color, whiteSpace: "nowrap" }}>
-        {s.label}
-      </span>
+      <div style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}>{detail}</div>
     </div>
   );
 }
@@ -86,12 +99,19 @@ export function DataSourcesFooter() {
     <WidgetCard
       title="Data Sources & Freshness"
       subtitle="Provenance and last-refreshed time for every card"
-      style={{ gridColumn: "1 / -1" }}
+      className="span-12"
     >
-      <div style={{ padding: "6px 16px 4px" }}>
-        <Row title="Shareholding Summary & Trend" detail={patternDetail} status={patternState.status} />
-        <Row title="Individual Holders" detail={holdersDetail} status={holdersState.status} />
-        <Row title="Insider Trading Disclosures" detail={insiderDetail} status={insiderState.status} />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: 12,
+          padding: "14px 16px",
+        }}
+      >
+        <SourceTile title="Summary & Trend" detail={patternDetail} status={patternState.status} />
+        <SourceTile title="Individual Holders" detail={holdersDetail} status={holdersState.status} />
+        <SourceTile title="Insider Disclosures" detail={insiderDetail} status={insiderState.status} />
       </div>
       <div
         style={{

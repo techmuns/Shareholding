@@ -211,7 +211,7 @@ export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
     <WidgetCard
       title="Insider Trading Disclosures"
       subtitle="SEBI PIT Reg 7(2) · last 12 months"
-      wide
+      className="span-12"
     >
       <InsiderStateGate state={state} loadingRows={6}>
         {(insider) => {

@@ -194,7 +194,7 @@ export function IndividualHoldersCard({ state }: { state: HoldersState }) {
     <WidgetCard
       title="Individual Holders"
       subtitle="Named promoter, FII/FPI, DII & public holders (BSE)"
-      wide
+      className="span-12"
     >
       <HoldersStateGate state={state} loadingRows={6}>
         {(holders) => {
