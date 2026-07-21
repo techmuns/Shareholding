@@ -2,20 +2,40 @@
 // that renders loading/empty/error uniformly, and the source/freshness line.
 import type { ReactNode } from "react";
 import { Landmark } from "lucide-react";
-import type { ShareholdingPatternSuccess } from "@shared/types";
+import type { HoldersSuccess, ShareholdingPatternSuccess } from "@shared/types";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
 
-/** Shared state for both wired cards (fetched once at the page level). */
-export type PatternState =
+/** The non-`done` phases shared by every BSE-backed card. */
+type NonDoneStatus =
   | { status: "loading" }
   | { status: "unavailable" } // not_found or a non-Indian (non-BSE) company
-  | { status: "error"; message: string }
-  | { status: "done"; pattern: ShareholdingPatternSuccess };
+  | { status: "error"; message: string };
+
+/** Shared state for the pattern-backed cards (fetched once at the page level). */
+export type PatternState = NonDoneStatus | { status: "done"; pattern: ShareholdingPatternSuccess };
+
+/** State for the individual-holders card (its own fetch). */
+export type HoldersState = NonDoneStatus | { status: "done"; holders: HoldersSuccess };
 
 /** Treat empty/unknown as India (so we still try); only skip clearly non-Indian. */
 export function isIndiaCountry(country: string): boolean {
   const c = country.trim().toLowerCase();
   return c === "" || c === "india" || c === "in" || c === "ind" || c === "bharat";
+}
+
+/** Render a card's non-`done` phase (loading/unavailable/error), else null. */
+function NonDoneView({ state, loadingRows }: { state: NonDoneStatus; loadingRows: number }) {
+  if (state.status === "loading") return <LoadingSkeleton rows={loadingRows} />;
+  if (state.status === "unavailable") {
+    return (
+      <EmptyState
+        message="BSE shareholding data is not available for this company."
+        hint="BSE coverage is limited to Indian (BSE-listed) companies."
+        icon={<Landmark size={20} />}
+      />
+    );
+  }
+  return <ErrorState message="Couldn't load shareholding data" hint={state.message} />;
 }
 
 /** Render the non-`done` states; otherwise hand the pattern to `children`. */
@@ -28,20 +48,22 @@ export function CardStateGate({
   loadingRows?: number;
   children: (pattern: ShareholdingPatternSuccess) => ReactNode;
 }) {
-  if (state.status === "loading") return <LoadingSkeleton rows={loadingRows} />;
-  if (state.status === "unavailable") {
-    return (
-      <EmptyState
-        message="BSE shareholding data is not available for this company."
-        hint="BSE coverage is limited to Indian (BSE-listed) companies."
-        icon={<Landmark size={20} />}
-      />
-    );
-  }
-  if (state.status === "error") {
-    return <ErrorState message="Couldn't load shareholding data" hint={state.message} />;
-  }
+  if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
   return <>{children(state.pattern)}</>;
+}
+
+/** Same gate, for the individual-holders card. */
+export function HoldersStateGate({
+  state,
+  loadingRows = 6,
+  children,
+}: {
+  state: HoldersState;
+  loadingRows?: number;
+  children: (holders: HoldersSuccess) => ReactNode;
+}) {
+  if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
+  return <>{children(state.holders)}</>;
 }
 
 function formatAsOf(iso: string): string {

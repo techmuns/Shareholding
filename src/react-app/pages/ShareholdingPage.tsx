@@ -1,72 +1,73 @@
 // Shareholding dashboard.
 //
-// The "Shareholding Summary" and "Promoter / FII / DII Trend" cards are wired to
-// BSE-backed data (fetched once here and shared). "Individual Holders" and
-// "Insider Trading Disclosures" remain placeholders for a later session.
+// The "Shareholding Summary", "Promoter / FII / DII Trend" and "Individual
+// Holders" cards are wired to BSE-backed data. "Insider Trading Disclosures"
+// remains a placeholder for a later session.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, Users } from "lucide-react";
-import type { ReactNode } from "react";
+import { FileText } from "lucide-react";
 import { useSelectedCompany } from "@/state/selected-company";
-import { getShareholdingPattern } from "@/lib/api";
+import { getShareholdingHolders, getShareholdingPattern } from "@/lib/api";
 import { WidgetCard } from "@/components/ui/WidgetCard";
 import { EmptyState } from "@/components/ui/states";
 import { ShareholdingSummaryCard } from "@/components/shareholding/ShareholdingSummaryCard";
 import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTrendCard";
-import { isIndiaCountry, type PatternState } from "@/components/shareholding/common";
-
-interface PlaceholderWidget {
-  title: string;
-  subtitle: string;
-  icon: ReactNode;
-}
-
-const PLACEHOLDERS: PlaceholderWidget[] = [
-  {
-    title: "Individual Holders",
-    subtitle: "Top individual and public shareholders",
-    icon: <Users size={20} />,
-  },
-  {
-    title: "Insider Trading Disclosures",
-    subtitle: "Recent insider buy / sell filings",
-    icon: <FileText size={20} />,
-  },
-];
+import { IndividualHoldersCard } from "@/components/shareholding/IndividualHoldersCard";
+import {
+  isIndiaCountry,
+  type HoldersState,
+  type PatternState,
+} from "@/components/shareholding/common";
 
 export default function ShareholdingPage() {
   const { company } = useSelectedCompany();
   const navigate = useNavigate();
-  const [state, setState] = useState<PatternState>({ status: "loading" });
+  const [patternState, setPatternState] = useState<PatternState>({ status: "loading" });
+  const [holdersState, setHoldersState] = useState<HoldersState>({ status: "loading" });
 
   // No company selected — return to the selector home screen.
   useEffect(() => {
     if (!company) navigate("/", { replace: true });
   }, [company, navigate]);
 
-  // Fetch the BSE shareholding pattern for the selected company. Guards against
-  // races by aborting on company change; short-circuits clearly non-Indian
-  // companies (BSE coverage is India-only) to a clean empty state.
+  // Fetch the BSE pattern + holders for the selected company. Both requests share
+  // one AbortController so a company change cancels stale work; clearly non-Indian
+  // companies short-circuit to a clean empty state (BSE coverage is India-only).
+  // The Worker's in-isolate resolve cache means the two calls don't re-resolve
+  // the scrip code upstream twice.
   useEffect(() => {
     if (!company) return;
 
     if (company.country && !isIndiaCountry(company.country)) {
-      setState({ status: "unavailable" });
+      setPatternState({ status: "unavailable" });
+      setHoldersState({ status: "unavailable" });
       return;
     }
 
-    setState({ status: "loading" });
+    setPatternState({ status: "loading" });
+    setHoldersState({ status: "loading" });
     const controller = new AbortController();
+    const req = { query: company.name || company.ticker, ticker: company.ticker, name: company.name };
+
     (async () => {
       try {
-        const res = await getShareholdingPattern(
-          { query: company.name || company.ticker, ticker: company.ticker, name: company.name },
-          controller.signal,
-        );
+        const res = await getShareholdingPattern(req, controller.signal);
         if (controller.signal.aborted) return;
-        if (res.ok) setState({ status: "done", pattern: res });
-        else if (res.code === "not_found") setState({ status: "unavailable" });
-        else setState({ status: "error", message: res.message });
+        if (res.ok) setPatternState({ status: "done", pattern: res });
+        else if (res.code === "not_found") setPatternState({ status: "unavailable" });
+        else setPatternState({ status: "error", message: res.message });
+      } catch {
+        // Aborted (company changed) — ignore.
+      }
+    })();
+
+    (async () => {
+      try {
+        const res = await getShareholdingHolders(req, controller.signal);
+        if (controller.signal.aborted) return;
+        if (res.ok) setHoldersState({ status: "done", holders: res });
+        else if (res.code === "not_found") setHoldersState({ status: "unavailable" });
+        else setHoldersState({ status: "error", message: res.message });
       } catch {
         // Aborted (company changed) — ignore.
       }
@@ -96,18 +97,20 @@ export default function ShareholdingPage() {
           gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
         }}
       >
-        <ShareholdingSummaryCard state={state} />
-        <ShareholdingTrendCard state={state} />
+        <ShareholdingSummaryCard state={patternState} />
+        <ShareholdingTrendCard state={patternState} />
+        <IndividualHoldersCard state={holdersState} />
 
-        {PLACEHOLDERS.map((w) => (
-          <WidgetCard key={w.title} title={w.title} subtitle={w.subtitle}>
-            <EmptyState
-              message="Data wiring coming next"
-              hint="This widget will populate once its data source is connected."
-              icon={w.icon}
-            />
-          </WidgetCard>
-        ))}
+        <WidgetCard
+          title="Insider Trading Disclosures"
+          subtitle="Recent insider buy / sell filings"
+        >
+          <EmptyState
+            message="Data wiring coming next"
+            hint="This widget will populate once its data source is connected."
+            icon={<FileText size={20} />}
+          />
+        </WidgetCard>
       </div>
     </div>
   );

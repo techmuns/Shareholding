@@ -20,7 +20,9 @@ disclosures.
     latest quarter with QoQ deltas — wired to BSE.
   - **Promoter / FII / DII Trend** — an inline-SVG stacked bar chart across the
     recent quarters — wired to BSE.
-  - **Individual Holders** and **Insider Trading Disclosures** — placeholders.
+  - **Individual Holders** — tabbed, sortable tables of named Promoter / FII·FPI /
+    DII / Other-Public holders (with promoter pledge %) — wired to BSE.
+  - **Insider Trading Disclosures** — placeholder.
 - **Munshot SDK integration** — a single module-scoped client, a `useHostContext`
   hook, and a `dashboard.capture.snapshot` / `dashboard.capture.visual` handler.
 - **Worker proxies (safe-failure contract, HTTP 200 + `{ ok:false, code, message }`)**:
@@ -30,6 +32,8 @@ disclosures.
   - `POST /api/shareholding/pattern` — normalized BSE shareholding pattern
     (latest quarter + trend). Fetched server-side with the browser-like headers
     BSE requires; non-Indian companies return a clean `not_found`.
+  - `POST /api/shareholding/holders` — named individual holders (promoters,
+    FII/FPI, DII, other public) for the latest quarter, with promoter pledge %.
 
 ## Tech stack
 
@@ -124,6 +128,7 @@ wrangler secret put MUNS_ACCESS_TOKEN
 | POST   | `/api/stock/search`         | Body `{ query }`. Safe-failure contract (200 OK).            |
 | POST   | `/api/bse/resolve`          | Body `{ query?, ticker?, name? }` → `{ scripCode, bseName }`.|
 | POST   | `/api/shareholding/pattern` | Body `{ scripCode }` or `{ query/ticker/name }` → pattern.   |
+| POST   | `/api/shareholding/holders` | Body `{ scripCode }` or `{ query/ticker/name }` (+ `qtrId?`) → holders. |
 
 All POST routes use the safe-failure contract (always HTTP 200; success is
 `{ ok:true, ... }`, failures are `{ ok:false, code, message }`).
@@ -138,7 +143,10 @@ The shareholding routes call BSE's public JSON APIs under
 - `SHPQNewFormat/w?scripcode=<code>` — list of shareholding-pattern quarters.
 - `Corp_shpSec_SHPSUMMARY_ng/w?SCRIPCODE=&QtrCode=` — Promoter / Public / Other totals.
 - `Corp_shpSec_SHPPubShold_ng/w?SCRIPCODE=&QtrCode=` — public split (FII/FPI, DII,
-  government, non-institutions) from the "Sub Total" rows.
+  government, non-institutions) from the "Sub Total" rows; its NAMED rows are the
+  individual public/institutional holders (classified by the section they sit in).
+- `Corp_shpPromoterNGroup_ng/w?SCRIPCODE=&QtrCode=` — named promoter & promoter-
+  group entities with shares, % holding and pledge/encumbrance %.
 
 Non-Indian (non-BSE) companies resolve to `not_found`, which the UI renders as a
 clean "not available" empty state.

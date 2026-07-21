@@ -104,3 +104,35 @@ export type ShareholdingPatternSuccess = { ok: true } & ShareholdingPattern;
 
 /** `POST /api/shareholding/pattern` response. */
 export type ShareholdingPatternResponse = ShareholdingPatternSuccess | BseFailure;
+
+// ---------------------------------------------------------------------------
+// Individual holders (added this session)
+// ---------------------------------------------------------------------------
+
+export type HolderCategory = "promoter" | "fii" | "dii" | "public";
+
+/** A single named shareholder BSE discloses for a quarter. */
+export interface IndividualHolder {
+  name: string;
+  category: HolderCategory;
+  sharesHeld: number;
+  pct: number; // % of total shares
+  pledgedPct?: number; // promoters only, when BSE discloses it
+}
+
+export interface HoldersBreakdown {
+  scripCode: string;
+  companyName: string;
+  qtrLabel: string;
+  asOf: string; // ISO fetch timestamp for the source/freshness widget
+  promoters: IndividualHolder[];
+  fii: IndividualHolder[];
+  dii: IndividualHolder[];
+  publicOther: IndividualHolder[];
+  disclosureNote: string;
+}
+
+export type HoldersSuccess = { ok: true } & HoldersBreakdown;
+
+/** `POST /api/shareholding/holders` response. */
+export type HoldersResponse = HoldersSuccess | BseFailure;

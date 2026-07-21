@@ -15,6 +15,7 @@
 //           Government, Non-Institutions.
 
 import type {
+  IndividualHolder,
   ShareholdingCategoryBreakdown,
   ShareholdingQuarter,
 } from "./types";
@@ -357,4 +358,139 @@ export function qoqDelta(
 ): number | null {
   if (!prior) return null;
   return round2(pick(latest.breakdown) - pick(prior.breakdown));
+}
+
+// ---------------------------------------------------------------------------
+// Individual holders
+//   Corp_shpPromoterNGroup_ng -> named promoter & promoter-group entities
+//   Corp_shpSec_SHPPubShold_ng -> named public/institutional holders (reused)
+// ---------------------------------------------------------------------------
+
+export const HOLDERS_DISCLOSURE_NOTE =
+  "Public & institutional holders are disclosed by BSE only above 1% of total shares; promoter-group entities are listed in full.";
+
+const NAME_FIELD = "Fld_ShareHolderName";
+const SHARES_FIELD = "Fld_TotalNoOfShares";
+
+/** Coerce a value to a number only when it is genuinely numeric, else undefined. */
+function asOptionalNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number.parseFloat(value.replace(/,/g, ""));
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+/** True for aggregate "Sub Total" / grand-total rows (never individual holders). */
+function isSubtotalRow(row: Record<string, unknown>): boolean {
+  const level = asString(row?.Fld_Level).trim().toLowerCase();
+  const code = asString(row?.Fld_Code).trim();
+  return level.startsWith("sub total") || code.startsWith("ST");
+}
+
+/** Sort holders by percentage held, descending (stable for equal values). */
+export function sortHoldersByPct(list: IndividualHolder[]): IndividualHolder[] {
+  return [...list].sort((a, b) => b.pct - a.pct);
+}
+
+/**
+ * Extract named promoter & promoter-group entities from
+ * `Corp_shpPromoterNGroup_ng`. Skips category/subtotal rows and zero-holding
+ * entries. Captures pledge/encumbrance % only when BSE actually discloses it.
+ */
+export function extractPromoterHolders(raw: unknown): IndividualHolder[] {
+  const table = (raw as { Table1?: unknown } | null | undefined)?.Table1;
+  if (!Array.isArray(table)) return [];
+
+  const holders: IndividualHolder[] = [];
+  for (const row of table as Record<string, unknown>[]) {
+    const name = asString(row?.[NAME_FIELD]).trim();
+    if (!name || isSubtotalRow(row)) continue;
+
+    const sharesHeld = asNumber(row?.[SHARES_FIELD]);
+    if (sharesHeld <= 0) continue; // a holder of 0 shares is not a holder
+
+    // Prefer total encumbrance; fall back to the narrower pledge field.
+    const pledgedPct =
+      asOptionalNumber(row?.Fld_TotalencumberedPercentage) ??
+      asOptionalNumber(row?.Fld_PledgeEncumberedPercentage);
+
+    holders.push({
+      name,
+      category: "promoter",
+      sharesHeld,
+      pct: round2(asNumber(row?.[PCT_FIELD])),
+      ...(pledgedPct === undefined ? {} : { pledgedPct: round2(pledgedPct) }),
+    });
+  }
+  return sortHoldersByPct(holders);
+}
+
+/**
+ * Extract named public/institutional holders from `Corp_shpSec_SHPPubShold_ng`,
+ * classifying each into fii / dii / publicOther. Rows are grouped by the section
+ * they belong to: named rows are buffered until the section's "Sub Total" row is
+ * reached, then assigned by its `Fld_SubCategory` (Institutions Foreign -> FII,
+ * Institutions Domestic -> DII, Government / Non-Institutions -> publicOther) —
+ * the same classification the subtotal splitter uses.
+ */
+export function extractPublicHolders(raw: unknown): {
+  fii: IndividualHolder[];
+  dii: IndividualHolder[];
+  publicOther: IndividualHolder[];
+} {
+  const table = (raw as { Table1?: unknown } | null | undefined)?.Table1;
+  const groups = {
+    fii: [] as IndividualHolder[],
+    dii: [] as IndividualHolder[],
+    publicOther: [] as IndividualHolder[],
+  };
+  if (!Array.isArray(table)) return groups;
+
+  const sectionOf = (sub: string): "fii" | "dii" | "publicOther" => {
+    const s = sub.toLowerCase();
+    if (s.includes("domestic")) return "dii";
+    if (s.includes("foreign")) return "fii";
+    return "publicOther"; // government / non-institutions / anything else public
+  };
+
+  let buffer: IndividualHolder[] = [];
+  const flush = (target: "fii" | "dii" | "publicOther") => {
+    if (buffer.length) {
+      groups[target].push(...buffer);
+      buffer = [];
+    }
+  };
+
+  for (const row of table as Record<string, unknown>[]) {
+    if (isSubtotalRow(row)) {
+      flush(sectionOf(asString(row?.Fld_SubCategory)));
+      continue;
+    }
+    const name = asString(row?.[NAME_FIELD]).trim();
+    if (!name) continue; // category header rows carry no name
+
+    const sharesHeld = asNumber(row?.[SHARES_FIELD]);
+    if (sharesHeld <= 0) continue;
+
+    buffer.push({
+      name,
+      category: "public", // refined below when assigned to fii/dii
+      sharesHeld,
+      pct: round2(asNumber(row?.[PCT_FIELD])),
+    });
+  }
+  // Anything after the last subtotal (defensive) is public.
+  flush("publicOther");
+
+  // Stamp the correct category on the institution groups.
+  groups.fii = groups.fii.map((h) => ({ ...h, category: "fii" as const }));
+  groups.dii = groups.dii.map((h) => ({ ...h, category: "dii" as const }));
+
+  return {
+    fii: sortHoldersByPct(groups.fii),
+    dii: sortHoldersByPct(groups.dii),
+    publicOther: sortHoldersByPct(groups.publicOther),
+  };
 }

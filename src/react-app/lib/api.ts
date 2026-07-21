@@ -1,6 +1,7 @@
 // Frontend API client for the Worker proxy.
 import type {
   BseResolveResponse,
+  HoldersResponse,
   ShareholdingPatternResponse,
   StockSearchResponse,
 } from "@shared/types";
@@ -75,6 +76,33 @@ export async function getShareholdingPattern(
       signal,
     });
     return (await res.json()) as ShareholdingPatternResponse;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return {
+      ok: false,
+      code: "provider_error",
+      message: "Could not reach BSE. Please try again.",
+    };
+  }
+}
+
+/**
+ * POST /api/shareholding/holders — named individual holders (promoters, FII/FPI,
+ * DII, other public) for the latest quarter. Accepts a scrip code, or a company
+ * name/ticker to resolve server-side.
+ */
+export async function getShareholdingHolders(
+  input: { scripCode?: string; query?: string; ticker?: string; name?: string; qtrId?: string },
+  signal?: AbortSignal,
+): Promise<HoldersResponse> {
+  try {
+    const res = await fetch("/api/shareholding/holders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal,
+    });
+    return (await res.json()) as HoldersResponse;
   } catch (err) {
     if (signal?.aborted) throw err;
     return {

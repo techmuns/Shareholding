@@ -4,6 +4,7 @@ import type { Env } from "./env";
 import { stockSearchRoute } from "./stock/searchRoute";
 import { bseResolveRoute } from "./bse/resolveRoute";
 import { shareholdingPatternRoute } from "./shareholding/patternRoute";
+import { shareholdingHoldersRoute } from "./shareholding/holdersRoute";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -18,6 +19,7 @@ app.post("/api/stock/search", stockSearchRoute);
 // BSE-backed shareholding routes (fetched server-side to set required headers).
 app.post("/api/bse/resolve", bseResolveRoute);
 app.post("/api/shareholding/pattern", shareholdingPatternRoute);
+app.post("/api/shareholding/holders", shareholdingHoldersRoute);
 
 // Anything not matched above:
 //  - /api/* -> JSON 404
