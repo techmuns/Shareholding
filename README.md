@@ -5,24 +5,31 @@ platform. It lets a user pick a listed company and view its **shareholding** —
 Promoter / FII / DII ownership breakdown (from BSE) and insider-trading
 disclosures.
 
-> This is the foundation session. It ships the full scaffold, a company-selector
-> home screen, and the Shareholding dashboard shell with placeholder widgets.
-> The shareholding data and insider-trading disclosures land in later sessions.
+> Foundation + first two data cards. The company selector and 3-zone shell are in
+> place, and the **Shareholding Summary** and **Promoter / FII / DII Trend** cards
+> are wired to live BSE data. Individual holders and insider-trading disclosures
+> land in later sessions.
 
 ## What's here today
 
 - **Company-selector home screen** — search by company name or ticker, pick one,
   and it becomes the selected company (held in a React context).
-- **Shareholding dashboard shell** — the mandatory Munshot 3-zone layout with the
-  selected company shown in the header ticker pill and four placeholder widget
-  cards (Shareholding Summary, Promoter / FII / DII Trend, Individual Holders,
-  Insider Trading Disclosures), each in an empty state.
+- **Shareholding dashboard** — the mandatory Munshot 3-zone layout with the
+  selected company in the header ticker pill and four widget cards:
+  - **Shareholding Summary** — KPI row (Promoter / FII·FPI / DII / Public) for the
+    latest quarter with QoQ deltas — wired to BSE.
+  - **Promoter / FII / DII Trend** — an inline-SVG stacked bar chart across the
+    recent quarters — wired to BSE.
+  - **Individual Holders** and **Insider Trading Disclosures** — placeholders.
 - **Munshot SDK integration** — a single module-scoped client, a `useHostContext`
   hook, and a `dashboard.capture.snapshot` / `dashboard.capture.visual` handler.
-- **Worker search proxy** — `POST /api/stock/search` forwards to the upstream
-  Munshot stock API with a server-side secret so the token never reaches the
-  browser. Every failure follows a safe-failure contract (HTTP 200 + `{ ok:false,
-  code, message }`).
+- **Worker proxies (safe-failure contract, HTTP 200 + `{ ok:false, code, message }`)**:
+  - `POST /api/stock/search` — company search via the upstream Munshot API
+    (server-side bearer token, never exposed to the browser).
+  - `POST /api/bse/resolve` — resolve a company name/ticker to a BSE scrip code.
+  - `POST /api/shareholding/pattern` — normalized BSE shareholding pattern
+    (latest quarter + trend). Fetched server-side with the browser-like headers
+    BSE requires; non-Indian companies return a clean `not_found`.
 
 ## Tech stack
 
@@ -111,9 +118,29 @@ wrangler secret put MUNS_ACCESS_TOKEN
 
 ## API
 
-| Method | Path                 | Notes                                             |
-| ------ | -------------------- | ------------------------------------------------- |
-| GET    | `/api/health`        | `{ status: "ok", timestamp }`                     |
-| POST   | `/api/stock/search`  | Body `{ query }`. Safe-failure contract (200 OK). |
+| Method | Path                        | Notes                                                        |
+| ------ | --------------------------- | ------------------------------------------------------------ |
+| GET    | `/api/health`               | `{ status: "ok", timestamp }`                                |
+| POST   | `/api/stock/search`         | Body `{ query }`. Safe-failure contract (200 OK).            |
+| POST   | `/api/bse/resolve`          | Body `{ query?, ticker?, name? }` → `{ scripCode, bseName }`.|
+| POST   | `/api/shareholding/pattern` | Body `{ scripCode }` or `{ query/ticker/name }` → pattern.   |
+
+All POST routes use the safe-failure contract (always HTTP 200; success is
+`{ ok:true, ... }`, failures are `{ ok:false, code, message }`).
+
+### BSE endpoints used (server-side)
+
+The shareholding routes call BSE's public JSON APIs under
+`https://api.bseindia.com/BseIndiaAPI/api`, which require browser-like headers
+(`Referer`/`Origin`/`User-Agent`/`Accept`) on every request:
+
+- `PeerSmartSearch/w?Type=SS&text=<q>` — name/ticker → scrip code (resolver).
+- `SHPQNewFormat/w?scripcode=<code>` — list of shareholding-pattern quarters.
+- `Corp_shpSec_SHPSUMMARY_ng/w?SCRIPCODE=&QtrCode=` — Promoter / Public / Other totals.
+- `Corp_shpSec_SHPPubShold_ng/w?SCRIPCODE=&QtrCode=` — public split (FII/FPI, DII,
+  government, non-institutions) from the "Sub Total" rows.
+
+Non-Indian (non-BSE) companies resolve to `not_found`, which the UI renders as a
+clean "not available" empty state.
 
 Non-`/api` routes are served by the SPA (Static Assets fallback).

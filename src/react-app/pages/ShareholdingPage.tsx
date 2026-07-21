@@ -1,36 +1,27 @@
-// Shareholding dashboard shell.
+// Shareholding dashboard.
 //
-// For now this proves the 3-zone shell + navigation + selected-company context:
-// the selected company appears in the header ticker pill and the grid renders
-// four placeholder widget cards, each in an empty state. Data wiring lands in a
-// later session.
-import { useEffect } from "react";
+// The "Shareholding Summary" and "Promoter / FII / DII Trend" cards are wired to
+// BSE-backed data (fetched once here and shared). "Individual Holders" and
+// "Insider Trading Disclosures" remain placeholders for a later session.
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, FileText, PieChart, Users } from "lucide-react";
+import { FileText, Users } from "lucide-react";
+import type { ReactNode } from "react";
 import { useSelectedCompany } from "@/state/selected-company";
+import { getShareholdingPattern } from "@/lib/api";
 import { WidgetCard } from "@/components/ui/WidgetCard";
 import { EmptyState } from "@/components/ui/states";
-import type { ReactNode } from "react";
+import { ShareholdingSummaryCard } from "@/components/shareholding/ShareholdingSummaryCard";
+import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTrendCard";
+import { isIndiaCountry, type PatternState } from "@/components/shareholding/common";
 
 interface PlaceholderWidget {
   title: string;
   subtitle: string;
   icon: ReactNode;
-  wide?: boolean;
 }
 
-const WIDGETS: PlaceholderWidget[] = [
-  {
-    title: "Shareholding Summary",
-    subtitle: "Latest Promoter / FII / DII / Public split",
-    icon: <PieChart size={20} />,
-  },
-  {
-    title: "Promoter / FII / DII Trend",
-    subtitle: "Quarter-over-quarter ownership shifts (BSE)",
-    icon: <Activity size={20} />,
-    wide: true,
-  },
+const PLACEHOLDERS: PlaceholderWidget[] = [
   {
     title: "Individual Holders",
     subtitle: "Top individual and public shareholders",
@@ -46,11 +37,43 @@ const WIDGETS: PlaceholderWidget[] = [
 export default function ShareholdingPage() {
   const { company } = useSelectedCompany();
   const navigate = useNavigate();
+  const [state, setState] = useState<PatternState>({ status: "loading" });
 
   // No company selected — return to the selector home screen.
   useEffect(() => {
     if (!company) navigate("/", { replace: true });
   }, [company, navigate]);
+
+  // Fetch the BSE shareholding pattern for the selected company. Guards against
+  // races by aborting on company change; short-circuits clearly non-Indian
+  // companies (BSE coverage is India-only) to a clean empty state.
+  useEffect(() => {
+    if (!company) return;
+
+    if (company.country && !isIndiaCountry(company.country)) {
+      setState({ status: "unavailable" });
+      return;
+    }
+
+    setState({ status: "loading" });
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await getShareholdingPattern(
+          { query: company.name || company.ticker, ticker: company.ticker, name: company.name },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        if (res.ok) setState({ status: "done", pattern: res });
+        else if (res.code === "not_found") setState({ status: "unavailable" });
+        else setState({ status: "error", message: res.message });
+      } catch {
+        // Aborted (company changed) — ignore.
+      }
+    })();
+
+    return () => controller.abort();
+  }, [company]);
 
   if (!company) return null;
 
@@ -73,16 +96,14 @@ export default function ShareholdingPage() {
           gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
         }}
       >
-        {WIDGETS.map((w) => (
-          <WidgetCard
-            key={w.title}
-            title={w.title}
-            subtitle={w.subtitle}
-            style={w.wide ? { gridColumn: "span 2" } : undefined}
-          >
+        <ShareholdingSummaryCard state={state} />
+        <ShareholdingTrendCard state={state} />
+
+        {PLACEHOLDERS.map((w) => (
+          <WidgetCard key={w.title} title={w.title} subtitle={w.subtitle}>
             <EmptyState
               message="Data wiring coming next"
-              hint="This widget will populate once the data source is connected."
+              hint="This widget will populate once its data source is connected."
               icon={w.icon}
             />
           </WidgetCard>

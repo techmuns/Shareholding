@@ -1,5 +1,9 @@
 // Frontend API client for the Worker proxy.
-import type { StockSearchResponse } from "@shared/types";
+import type {
+  BseResolveResponse,
+  ShareholdingPatternResponse,
+  StockSearchResponse,
+} from "@shared/types";
 
 /**
  * POST /api/stock/search. Always resolves to a `StockSearchResponse` (the proxy
@@ -25,6 +29,58 @@ export async function searchStocks(
       ok: false,
       code: "provider_error",
       message: "Could not reach the search service. Please try again.",
+    };
+  }
+}
+
+/**
+ * POST /api/bse/resolve — resolve a company (name/ticker) to a BSE scrip code.
+ * Same safe-failure semantics as `searchStocks`.
+ */
+export async function resolveBseScrip(
+  input: { query?: string; ticker?: string; name?: string },
+  signal?: AbortSignal,
+): Promise<BseResolveResponse> {
+  try {
+    const res = await fetch("/api/bse/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal,
+    });
+    return (await res.json()) as BseResolveResponse;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return {
+      ok: false,
+      code: "provider_error",
+      message: "Could not reach BSE. Please try again.",
+    };
+  }
+}
+
+/**
+ * POST /api/shareholding/pattern — normalized BSE shareholding pattern.
+ * Accepts a scrip code, or a company name/ticker to resolve server-side.
+ */
+export async function getShareholdingPattern(
+  input: { scripCode?: string; query?: string; ticker?: string; name?: string },
+  signal?: AbortSignal,
+): Promise<ShareholdingPatternResponse> {
+  try {
+    const res = await fetch("/api/shareholding/pattern", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal,
+    });
+    return (await res.json()) as ShareholdingPatternResponse;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return {
+      ok: false,
+      code: "provider_error",
+      message: "Could not reach BSE. Please try again.",
     };
   }
 }
