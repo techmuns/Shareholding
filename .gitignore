@@ -1,0 +1,21 @@
+# dependencies
+node_modules
+
+# build output
+dist
+.wrangler
+
+# local secrets (NEVER commit)
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# tsc build info
+*.tsbuildinfo
+.tmp
+
+# logs & editor
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

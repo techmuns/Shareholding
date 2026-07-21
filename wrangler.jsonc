@@ -1,0 +1,21 @@
+{
+  // Cloudflare Workers config for the Shareholding dashboard.
+  //
+  // Secrets (NEVER committed):
+  //   wrangler secret put MUNS_ACCESS_TOKEN
+  // For local dev, put MUNS_ACCESS_TOKEN in `.dev.vars` (git-ignored).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shareholding",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  // SPA served through the Workers Static Assets binding.
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  }
+}

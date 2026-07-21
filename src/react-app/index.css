@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* CSS-based theming — design tokens (Munshot standard). No tailwind.config.js. */
+@theme {
+  --color-primary: #4f46e5;
+  --color-primary-light: #eef2ff;
+  --color-primary-border: #e0e7ff;
+  --color-primary-text: #4338ca;
+  --color-text-primary: #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6b7280;
+  --color-text-hint: #9ca3af;
+  --color-border-default: rgba(229, 231, 235, 0.8);
+  --color-error: #ef4444;
+  --color-error-bg: #fef2f2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #111827;
+}
+
+/* Shimmer skeleton for loading states. */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shimmer {
+  background-image: linear-gradient(90deg, #e5e7eb 0%, #f3f4f6 50%, #e5e7eb 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* Widget card hover lift + indigo-tinted shadow. */
+.widget-card {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.widget-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(79, 70, 229, 0.2);
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.08),
+    0 8px 16px rgba(79, 70, 229, 0.06);
+}
+
+/* Search result row hover. */
+.result-row {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.result-row:hover {
+  border-color: rgba(79, 70, 229, 0.35);
+  background: #f5f3ff;
+}

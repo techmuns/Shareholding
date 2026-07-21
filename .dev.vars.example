@@ -1,0 +1,4 @@
+# Copy to `.dev.vars` for local development (git-ignored).
+# In production, set this as a Worker secret:
+#   wrangler secret put MUNS_ACCESS_TOKEN
+MUNS_ACCESS_TOKEN=
