@@ -15,7 +15,6 @@ import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTre
 import { IndividualHoldersCard } from "@/components/shareholding/IndividualHoldersCard";
 import { InsiderDisclosuresCard } from "@/components/shareholding/InsiderDisclosuresCard";
 import { ShareholdingHistoryCard } from "@/components/shareholding/ShareholdingHistoryCard";
-import { DataSourcesFooter } from "@/components/shareholding/DataSourcesFooter";
 
 export default function ShareholdingPage() {
   const { company } = useSelectedCompany();
@@ -46,7 +45,6 @@ export default function ShareholdingPage() {
         <IndividualHoldersCard state={holdersState} />
         <ShareholdingHistoryCard state={historyState} />
         <InsiderDisclosuresCard state={insiderState} />
-        <DataSourcesFooter />
       </div>
     </div>
   );

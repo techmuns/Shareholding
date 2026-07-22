@@ -41,11 +41,9 @@ disclosures.
   - **Live snapshot handler** — `dashboard.capture.snapshot` returns the current
     `{ context, selection, data }` (loaded sections only); `dashboard.capture.visual`
     captures Zone 2 as a Blob.
-  - **Data Sources & Freshness footer** — one card summarizing provenance +
-    last-refreshed for every card, reflecting the real feeds (e.g. "NSE
-    unavailable — BSE provided the data" for insider).
-  - **Partial-data resilience** — the four cards fetch independently; one failing
-    shows only its own error state and never blanks the others.
+  - **Partial-data resilience** — the cards fetch independently; one failing
+    shows only its own error state and never blanks the others. Each card also
+    carries its own source/freshness line.
 - **Munshot SDK integration** — a single module-scoped client, a `useHostContext`
   hook, and a `dashboard.capture.snapshot` / `dashboard.capture.visual` handler.
 - **Worker proxies (safe-failure contract, HTTP 200 + `{ ok:false, code, message }`)**:
