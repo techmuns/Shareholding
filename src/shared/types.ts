@@ -219,3 +219,26 @@ export type ShareholdingHistorySuccess = { ok: true } & ShareholdingHistory;
 
 /** `POST /api/shareholding/history` response. */
 export type ShareholdingHistoryResponse = ShareholdingHistorySuccess | BseFailure;
+
+// ---------------------------------------------------------------------------
+// Recently viewed companies — shared 7-day list (Workers KV)
+// ---------------------------------------------------------------------------
+
+/** A company opened in the last 7 days, shared across all dashboard visitors. */
+export interface RecentCompany {
+  ticker: string;
+  name: string;
+  country: string;
+  sector: string;
+  lastSeen: string; // ISO timestamp of the most recent open
+}
+
+/** `GET /api/recent/list` response (never a hard error — empty on any issue). */
+export type RecentListResponse =
+  | { ok: true; companies: RecentCompany[] }
+  | { ok: false; code: "provider_error"; message: string };
+
+/** `POST /api/recent/track` response. */
+export type RecentTrackResponse =
+  | { ok: true }
+  | { ok: false; code: "invalid_request" | "provider_error"; message: string };

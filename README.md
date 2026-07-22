@@ -46,6 +46,10 @@ disclosures.
   - **Partial-data resilience** — the cards fetch independently; one failing
     shows only its own error state and never blanks the others. Each card also
     carries its own source/freshness line.
+  - **Recently viewed (shared)** — every company opened in the last 7 days is
+    saved to a shared list shown under the search bar on the home screen. It's
+    backed by Workers KV, so it's the same for **every** visitor, and each entry
+    persists until 7 days after it was last opened.
 - **Munshot SDK integration** — a single module-scoped client, a `useHostContext`
   hook, and a `dashboard.capture.snapshot` / `dashboard.capture.visual` handler.
 - **Worker proxies (safe-failure contract, HTTP 200 + `{ ok:false, code, message }`)**:
@@ -64,6 +68,9 @@ disclosures.
     financials feed (`filings/combined_financials`). The upstream returns a
     Markdown company page; the Worker uses only its "Shareholding Pattern"
     section and ignores the rest.
+  - `POST /api/recent/track` + `GET /api/recent/list` — the shared "recently
+    viewed companies" list, backed by Workers KV with a 7-day TTL per company
+    (see [Recently viewed](#recently-viewed-shared-7-day-list)).
 
 ## Tech stack
 
@@ -153,9 +160,18 @@ emits the deploy-ready Worker config to `dist/shareholding/wrangler.json` during
 
 `wrangler.jsonc` is already configured: `name: "shareholding"`, `main:
 "./src/worker/index.ts"`, a current `compatibility_date`, `compatibility_flags:
-["nodejs_compat"]`, and the `assets` block (`./dist/client`, `binding: "ASSETS"`,
-`not_found_handling: "single-page-application"`). Verify locally with
-`npm run check` (runs the dry-run).
+["nodejs_compat"]`, the `assets` block (`./dist/client`, `binding: "ASSETS"`,
+`not_found_handling: "single-page-application"`), and the `RECENT_KV` KV binding.
+Verify locally with `npm run check` (runs the dry-run).
+
+> **KV setup required before deploy.** `wrangler.jsonc` ships placeholder KV ids
+> for `RECENT_KV`. Create the namespace once and paste the real ids in, or the
+> deploy will fail — see [Recently viewed](#recently-viewed-shared-7-day-list):
+>
+> ```bash
+> wrangler kv namespace create RECENT_KV          # -> paste id into kv_namespaces[0].id
+> wrangler kv namespace create RECENT_KV --preview # -> paste into preview_id
+> ```
 
 After the first deploy, set the secret once (enables the company picker):
 
@@ -177,9 +193,32 @@ No secret values live in the repo. `.dev.vars` is git-ignored; only
 | POST   | `/api/shareholding/holders` | Body `{ scripCode }` or `{ query/ticker/name }` (+ `qtrId?`) → holders. |
 | POST   | `/api/insider/disclosures`  | Body `{ ticker, country?, name? }` → SEBI PIT insider trades (Munshot). |
 | POST   | `/api/shareholding/history` | Body `{ ticker, country?, name? }` → multi-quarter shareholding pattern (Munshot). |
+| POST   | `/api/recent/track`         | Body `{ ticker, name?, country?, sector? }` → records an open in the shared 7-day list. |
+| GET    | `/api/recent/list`          | → `{ ok:true, companies }` — shared companies opened in the last 7 days (newest first). |
 
 All POST routes use the safe-failure contract (always HTTP 200; success is
 `{ ok:true, ... }`, failures are `{ ok:false, code, message }`).
+
+### Recently viewed (shared 7-day list)
+
+Every company opened is recorded into a **Workers KV** namespace (`RECENT_KV`)
+as a single entry keyed by ticker, written with a **7-day `expirationTtl`** that
+is refreshed on each open — so a company drops off exactly 7 days after it was
+last opened. The company fields + timestamp live in the entry's KV *metadata*,
+so `GET /api/recent/list` returns the whole list without a per-key read. Because
+KV is global, the list is identical for **every** visitor.
+
+The feature degrades gracefully: if `RECENT_KV` is not bound, `track` no-ops and
+`list` returns an empty set, so the rest of the app is unaffected.
+
+**One-time setup** (before the first deploy that uses it) — create the namespace
+and paste the returned ids into `wrangler.jsonc` (`kv_namespaces[0].id` and
+`preview_id`):
+
+```bash
+wrangler kv namespace create RECENT_KV
+wrangler kv namespace create RECENT_KV --preview
+```
 
 ### BSE endpoints used (server-side)
 

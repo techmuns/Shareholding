@@ -7,6 +7,7 @@ import { shareholdingPatternRoute } from "./shareholding/patternRoute";
 import { shareholdingHoldersRoute } from "./shareholding/holdersRoute";
 import { insiderDisclosuresRoute } from "./insider/disclosuresRoute";
 import { shareholdingHistoryRoute } from "./shareholding/historyRoute";
+import { recentListRoute, recentTrackRoute } from "./recent/recentRoute";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -24,6 +25,10 @@ app.post("/api/shareholding/pattern", shareholdingPatternRoute);
 app.post("/api/shareholding/holders", shareholdingHoldersRoute);
 app.post("/api/shareholding/history", shareholdingHistoryRoute);
 app.post("/api/insider/disclosures", insiderDisclosuresRoute);
+
+// Shared "recently viewed companies" list (Workers KV, 7-day TTL).
+app.post("/api/recent/track", recentTrackRoute);
+app.get("/api/recent/list", recentListRoute);
 
 // Anything not matched above:
 //  - /api/* -> JSON 404

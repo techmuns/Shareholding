@@ -13,6 +13,7 @@ import {
 } from "react";
 import type { SelectedCompany } from "@shared/types";
 import { sdk } from "@/lib/sdk";
+import { trackRecentCompany } from "@/lib/api";
 
 interface SelectedCompanyContextValue {
   company: SelectedCompany | null;
@@ -26,10 +27,17 @@ export function SelectedCompanyProvider({ children }: { children: ReactNode }) {
   const [company, setCompany] = useState<SelectedCompany | null>(null);
 
   // Publishing on select covers both paths (manual picker and host auto-select),
-  // per the SDK communication standards (namespaced topic).
+  // per the SDK communication standards (namespaced topic). Every selection is
+  // also recorded into the shared 7-day "recently viewed" list (best-effort).
   const select = useCallback((c: SelectedCompany) => {
     setCompany(c);
     sdk.publish("shareholding.company.select", { ticker: c.ticker, name: c.name });
+    void trackRecentCompany({
+      ticker: c.ticker,
+      name: c.name,
+      country: c.country,
+      sector: c.sector,
+    });
   }, []);
 
   const value = useMemo<SelectedCompanyContextValue>(

@@ -12,6 +12,21 @@
   "observability": {
     "enabled": true
   },
+  // Shared store for the "recently viewed companies" list (7-day TTL per entry).
+  // It's a Workers KV namespace so EVERY visitor sees the same list.
+  //
+  // ONE-TIME SETUP (required before the first deploy that uses it):
+  //   wrangler kv namespace create RECENT_KV
+  //   wrangler kv namespace create RECENT_KV --preview
+  // then paste the returned ids into "id" / "preview_id" below.
+  // Until then the feature no-ops gracefully (the list just stays empty).
+  "kv_namespaces": [
+    {
+      "binding": "RECENT_KV",
+      "id": "REPLACE_WITH_RECENT_KV_NAMESPACE_ID",
+      "preview_id": "REPLACE_WITH_RECENT_KV_PREVIEW_ID"
+    }
+  ],
   // SPA served through the Workers Static Assets binding.
   "assets": {
     "directory": "./dist/client",

@@ -5,12 +5,12 @@
 // and routes to the Shareholding dashboard.
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Building2, Search } from "lucide-react";
-import { searchStocks } from "@/lib/api";
+import { ArrowRight, Building2, Clock, Search } from "lucide-react";
+import { getRecentCompanies, searchStocks } from "@/lib/api";
 import { useSelectedCompany } from "@/state/selected-company";
 import { WidgetCard } from "@/components/ui/WidgetCard";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
-import type { StockSearchResult } from "@shared/types";
+import type { RecentCompany, StockSearchResult } from "@shared/types";
 
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 300;
@@ -26,7 +26,20 @@ export default function CompanySelectPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [state, setState] = useState<SearchState>({ status: "idle" });
+  const [recent, setRecent] = useState<RecentCompany[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load the shared "recently viewed" list on mount (refreshes each time the
+  // selector is shown, e.g. after using the back button).
+  useEffect(() => {
+    const controller = new AbortController();
+    getRecentCompanies(controller.signal)
+      .then(setRecent)
+      .catch(() => {
+        /* aborted */
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const q = query.trim();
@@ -57,13 +70,8 @@ export default function CompanySelectPage() {
     };
   }, [query]);
 
-  function pick(result: StockSearchResult) {
-    select({
-      ticker: result.ticker,
-      name: result.name,
-      country: result.country,
-      sector: result.sector,
-    });
+  function open(c: { ticker: string; name: string; country: string; sector: string }) {
+    select({ ticker: c.ticker, name: c.name, country: c.country, sector: c.sector });
     navigate("/shareholding");
   }
 
@@ -140,11 +148,78 @@ export default function CompanySelectPage() {
             />
           </div>
 
-          <SearchResults state={state} onPick={pick} />
+          <SearchResults state={state} onPick={open} />
         </div>
       </WidgetCard>
+
+      {recent.length > 0 && (
+        <WidgetCard
+          title="Recently viewed"
+          subtitle="Companies opened by anyone in the last 7 days"
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: 12 }}>
+            {recent.map((r) => (
+              <button
+                key={r.ticker}
+                type="button"
+                onClick={() => open(r)}
+                className="result-row"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(229,231,235,0.8)",
+                  background: "#ffffff",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
+                    {r.ticker || "—"}
+                    {r.name && <span style={{ fontWeight: 400, color: "#6b7280" }}> · {r.name}</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                    {[r.sector, r.country].filter(Boolean).join(" · ") || "No metadata"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    flexShrink: 0,
+                    fontSize: 11,
+                    color: "#9ca3af",
+                  }}
+                >
+                  <Clock size={12} />
+                  {timeAgo(r.lastSeen)}
+                </div>
+              </button>
+            ))}
+          </div>
+        </WidgetCard>
+      )}
     </div>
   );
+}
+
+/** Compact "how long ago" label from an ISO timestamp. */
+function timeAgo(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function SearchResults({

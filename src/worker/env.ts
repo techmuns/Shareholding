@@ -10,4 +10,9 @@ export interface Env {
   MUNS_ACCESS_TOKEN?: string;
   /** Alternate name for the same Munshot bearer token (either may be set). */
   MUNS_TOKEN?: string;
+  /**
+   * Shared KV store for the "recently viewed companies" list (7-day TTL).
+   * Global across all visitors. Optional: if unbound, the feature no-ops.
+   */
+  RECENT_KV?: KVNamespace;
 }

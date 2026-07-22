@@ -3,6 +3,8 @@ import type {
   BseResolveResponse,
   HoldersResponse,
   InsiderResponse,
+  RecentCompany,
+  RecentListResponse,
   ShareholdingHistoryResponse,
   ShareholdingPatternResponse,
   StockSearchResponse,
@@ -138,6 +140,44 @@ export async function getInsiderDisclosures(
       code: "provider_error",
       message: "Could not reach the disclosures service. Please try again.",
     };
+  }
+}
+
+/**
+ * POST /api/recent/track — record that a company was opened, into the shared
+ * 7-day list. Best-effort and fire-and-forget: failures are swallowed so a
+ * tracking hiccup never affects navigation.
+ */
+export async function trackRecentCompany(input: {
+  ticker: string;
+  name: string;
+  country: string;
+  sector: string;
+}): Promise<void> {
+  try {
+    await fetch("/api/recent/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      keepalive: true, // survive the navigation that usually follows a pick
+    });
+  } catch {
+    /* best-effort — ignore */
+  }
+}
+
+/**
+ * GET /api/recent/list — the shared list of companies opened in the last 7 days
+ * (most recent first). Returns [] on any failure.
+ */
+export async function getRecentCompanies(signal?: AbortSignal): Promise<RecentCompany[]> {
+  try {
+    const res = await fetch("/api/recent/list", { signal });
+    const data = (await res.json()) as RecentListResponse;
+    return data.ok ? data.companies : [];
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return [];
   }
 }
 
