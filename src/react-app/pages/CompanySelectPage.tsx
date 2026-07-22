@@ -177,7 +177,7 @@ export default function CompanySelectPage() {
                   background: "#ffffff",
                 }}
               >
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
                     {r.ticker || "—"}
                     {r.name && <span style={{ fontWeight: 400, color: "#6b7280" }}> · {r.name}</span>}
@@ -289,7 +289,7 @@ function SearchResults({
               background: "#ffffff",
             }}
           >
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>
                 {r.ticker || "—"}
                 {r.name && (

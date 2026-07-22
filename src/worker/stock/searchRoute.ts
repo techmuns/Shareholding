@@ -12,7 +12,7 @@
 // SECURITY: never log the token, the Authorization header, or the upstream body.
 
 import type { Context } from "hono";
-import { normalizeStockResults, extractTotalResults } from "@shared/stockSearch";
+import { normalizeStockResults } from "@shared/stockSearch";
 import type { StockSearchResponse } from "@shared/types";
 import type { Env } from "../env";
 
@@ -105,10 +105,11 @@ export const stockSearchRoute: Handler = async (c) => {
       });
     }
 
+    // Count reflects the plausible results we actually return (junk rows are
+    // filtered in the normalizer), so the "Showing N of N" line stays honest.
     const results = normalizeStockResults(raw);
-    const totalResults = extractTotalResults(raw, results.length);
 
-    return json({ ok: true, query, totalResults, results });
+    return json({ ok: true, query, totalResults: results.length, results });
   } catch {
     if (timedOut) {
       return json({
