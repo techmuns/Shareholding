@@ -14,7 +14,6 @@ import { useSelectedCompany } from "@/state/selected-company";
 import { useDashboardData } from "@/state/dashboard-data";
 import { ShareholdingChangesCard } from "@/components/shareholding/ShareholdingChangesCard";
 import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTrendCard";
-import { IndividualHoldersCard } from "@/components/shareholding/IndividualHoldersCard";
 import { InsiderDisclosuresCard } from "@/components/shareholding/InsiderDisclosuresCard";
 import { ShareholdingHistoryCard } from "@/components/shareholding/ShareholdingHistoryCard";
 
@@ -48,7 +47,6 @@ export default function ShareholdingPage() {
           historyState={historyState}
         />
         <ShareholdingTrendCard state={patternState} />
-        <IndividualHoldersCard state={holdersState} />
         <ShareholdingHistoryCard state={historyState} />
         <InsiderDisclosuresCard state={insiderState} />
       </div>

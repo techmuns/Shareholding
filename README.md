@@ -5,10 +5,10 @@ platform. It lets a user pick a listed company and view its **shareholding** —
 Promoter / FII / DII ownership breakdown (from BSE) and insider-trading
 disclosures.
 
-> The company selector and 3-zone shell are in place, and every card is wired to
-> live data: **Shareholding Summary**, **Promoter / FII / DII Trend** and
-> **Individual Holders** from BSE; **Insider Trading Disclosures** and
-> **Shareholding Pattern (History)** from the Munshot filings APIs.
+> The company selector and 3-zone shell are in place, with a **Shareholding
+> Changes** analytics hero pinned to the top and the raw-data cards below it:
+> **Promoter / FII / DII Trend** from BSE, and **Shareholding Pattern (History)**
+> + **Insider Trading Disclosures** from the Munshot filings APIs.
 
 ## What's here today
 
@@ -27,8 +27,6 @@ disclosures.
     with — or duplicates — the detail it summarizes.
   - **Promoter / FII / DII Trend** — the quarter-by-quarter composition & change
     table that substantiates the hero — wired to BSE.
-  - **Individual Holders** — tabbed, sortable tables of named Promoter / FII·FPI /
-    DII / Other-Public holders (with promoter pledge %) — wired to BSE.
   - **Shareholding Pattern (History)** — the multi-quarter shareholding pattern
     from the Munshot combined-financials feed: category subtotals (Promoters /
     FIIs / DIIs / Government / Public) with the named entities disclosed under
@@ -37,7 +35,7 @@ disclosures.
     with buy/sell/pledge chips — wired to the Munshot filings API (Trendlyne).
 - **Embeddability & polish** (works standalone or embedded in Munshot):
   - **Host-context auto-select** — when the host supplies a selected ticker via the
-    SDK, the dashboard auto-selects that company and loads all four cards
+    SDK, the dashboard auto-selects that company and loads every card
     (skipping the picker), and reacts to host ticker changes without a refresh.
     The manual picker is the fallback; a user override (via the header back
     button) sticks until the host pushes a new ticker. Each selection publishes

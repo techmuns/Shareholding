@@ -16,7 +16,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { HolderCategory } from "@shared/types";
 import {
   getInsiderDisclosures,
   getShareholdingHistory,
@@ -48,8 +47,6 @@ interface DashboardData {
   /** True once at least one section has loaded (enables Export). */
   hasAnyData: boolean;
   // Shared UI selection (controlled by the cards, read by the snapshot handler).
-  holdersTab: HolderCategory;
-  setHoldersTab: (t: HolderCategory) => void;
   insiderSort: InsiderSort;
   setInsiderSort: (s: InsiderSort) => void;
 }
@@ -69,7 +66,6 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const [holdersTab, setHoldersTab] = useState<HolderCategory>("promoter");
   const [insiderSort, setInsiderSort] = useState<InsiderSort>({ key: "date", desc: true });
 
   const lastKeyRef = useRef<string | null>(null);
@@ -189,8 +185,6 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       lastRefreshed,
       refresh: () => setRefreshNonce((n) => n + 1),
       hasAnyData,
-      holdersTab,
-      setHoldersTab,
       insiderSort,
       setInsiderSort,
     };
@@ -201,7 +195,6 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     historyState,
     isRefreshing,
     lastRefreshed,
-    holdersTab,
     insiderSort,
   ]);
 

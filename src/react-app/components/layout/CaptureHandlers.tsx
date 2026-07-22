@@ -37,7 +37,6 @@ export function CaptureHandlers() {
         lastRefreshed: data.lastRefreshed,
       },
       selection: {
-        holdersTab: data.holdersTab,
         insiderSort: data.insiderSort,
       },
       // Omit sections that failed or never loaded.
