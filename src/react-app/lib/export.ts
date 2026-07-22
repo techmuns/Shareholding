@@ -1,5 +1,5 @@
-// CSV export — a single, self-explanatory .csv with clearly-labeled sections.
-// No new dependencies; proper RFC-4180-style escaping.
+// Excel (.xlsx) export — a multi-sheet workbook with one sheet per loaded card.
+// Uses the dependency-free writer in ./xlsx (no third-party library).
 import type {
   HoldersSuccess,
   InsiderSuccess,
@@ -8,21 +8,7 @@ import type {
   ShareholdingPatternSuccess,
 } from "@shared/types";
 import { publicFloatPct } from "@shared/bseShareholding";
-
-/** Escape a single CSV field (quote when it contains comma / quote / newline). */
-function esc(value: unknown): string {
-  const s =
-    value === null || value === undefined
-      ? ""
-      : typeof value === "number"
-        ? String(value)
-        : String(value);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function row(...cells: unknown[]): string {
-  return cells.map(esc).join(",");
-}
+import { buildXlsxBlob, downloadBlob, type CellValue, type Sheet } from "./xlsx";
 
 export interface DashboardExportInput {
   company: SelectedCompany;
@@ -34,65 +20,75 @@ export interface DashboardExportInput {
 }
 
 /**
- * Build a single CSV document with a stamped header and one labeled section per
- * loaded card. Sections that didn't load are simply omitted.
+ * Build the workbook sheets for the current company. An "Overview" sheet with
+ * the stamp is always present; every other sheet is added only when its card
+ * loaded, so the file mirrors exactly what the user is looking at.
  */
-export function buildDashboardCsv(input: DashboardExportInput): string {
+export function buildDashboardSheets(input: DashboardExportInput): Sheet[] {
   const { company, generatedAt, pattern, holders, insider, history } = input;
-  const lines: string[] = [];
+  const sheets: Sheet[] = [];
 
-  // ---- Stamp -------------------------------------------------------------
-  lines.push(row("Shareholding Dashboard Export"));
-  lines.push(row("Company", company.name || company.ticker));
-  lines.push(row("Ticker", company.ticker));
+  // ---- Overview (stamp) --------------------------------------------------
   const scrip = pattern?.scripCode ?? holders?.scripCode ?? insider?.scripCode ?? "";
-  if (scrip) lines.push(row("BSE Scrip Code", scrip));
-  lines.push(row("Generated At", generatedAt));
-  lines.push("");
+  const overview: CellValue[][] = [
+    ["Shareholding Dashboard Export"],
+    ["Company", company.name || company.ticker],
+    ["Ticker", company.ticker],
+  ];
+  if (scrip) overview.push(["BSE Scrip Code", scrip]);
+  overview.push(["Generated At", generatedAt]);
+  sheets.push({ name: "Overview", rows: overview });
 
   // ---- Shareholding Summary (latest quarter) ----------------------------
   if (pattern) {
     const b = pattern.latest.breakdown;
-    lines.push(row("## Shareholding Summary"));
-    lines.push(row("As of quarter", pattern.latest.qtrLabel));
-    lines.push(row("Category", "Percent of total"));
-    lines.push(row("Promoter & Promoter Group", b.promoterPct));
-    lines.push(row("Public - Institutions (FII + DII)", b.publicInstitutionsPct));
-    lines.push(row("FII / FPI", b.fiiPct));
-    lines.push(row("DII", b.diiPct));
-    lines.push(row("Public - Non-Institutions", b.publicNonInstitutionsPct));
-    lines.push(row("Others (Govt / Custodian / Trusts)", b.othersPct));
-    lines.push(row("Public float (FII + DII + Non-Inst.)", publicFloatPct(b)));
-    lines.push("");
+    sheets.push({
+      name: "Summary",
+      rows: [
+        ["Shareholding Summary"],
+        ["As of quarter", pattern.latest.qtrLabel],
+        [],
+        ["Category", "Percent of total"],
+        ["Promoter & Promoter Group", b.promoterPct],
+        ["Public - Institutions (FII + DII)", b.publicInstitutionsPct],
+        ["FII / FPI", b.fiiPct],
+        ["DII", b.diiPct],
+        ["Public - Non-Institutions", b.publicNonInstitutionsPct],
+        ["Others (Govt / Custodian / Trusts)", b.othersPct],
+        ["Public float (FII + DII + Non-Inst.)", publicFloatPct(b)],
+      ],
+    });
   }
 
   // ---- Quarterly Trend ---------------------------------------------------
   if (pattern && pattern.trend.length > 0) {
-    lines.push(row("## Quarterly Trend"));
-    lines.push(
-      row("Quarter", "Promoter %", "FII/FPI %", "DII %", "Public-NonInst %", "Others %"),
-    );
+    const rows: CellValue[][] = [
+      ["Quarterly Trend"],
+      [],
+      ["Quarter", "Promoter %", "FII/FPI %", "DII %", "Public-NonInst %", "Others %"],
+    ];
     for (const q of pattern.trend) {
       const b = q.breakdown;
-      lines.push(
-        row(
-          q.qtrLabel,
-          b.promoterPct,
-          b.fiiPct,
-          b.diiPct,
-          b.publicNonInstitutionsPct,
-          b.othersPct,
-        ),
-      );
+      rows.push([
+        q.qtrLabel,
+        b.promoterPct,
+        b.fiiPct,
+        b.diiPct,
+        b.publicNonInstitutionsPct,
+        b.othersPct,
+      ]);
     }
-    lines.push("");
+    sheets.push({ name: "Trend", rows });
   }
 
   // ---- Individual Holders (by category) ---------------------------------
   if (holders) {
-    lines.push(row("## Individual Holders"));
-    lines.push(row("As of quarter", holders.qtrLabel));
-    lines.push(row("Category", "Holder", "Percent", "Shares", "Pledged %"));
+    const rows: CellValue[][] = [
+      ["Individual Holders"],
+      ["As of quarter", holders.qtrLabel],
+      [],
+      ["Category", "Holder", "Percent", "Shares", "Pledged %"],
+    ];
     const groups: [string, HoldersSuccess["promoters"]][] = [
       ["Promoter", holders.promoters],
       ["FII / FPI", holders.fii],
@@ -101,21 +97,20 @@ export function buildDashboardCsv(input: DashboardExportInput): string {
     ];
     for (const [label, list] of groups) {
       for (const h of list) {
-        lines.push(
-          row(label, h.name, h.pct, h.sharesHeld, h.pledgedPct === undefined ? "" : h.pledgedPct),
-        );
+        rows.push([label, h.name, h.pct, h.sharesHeld, h.pledgedPct ?? ""]);
       }
     }
-    lines.push("");
+    sheets.push({ name: "Holders", rows });
   }
 
   // ---- Insider Disclosures ----------------------------------------------
   if (insider) {
-    lines.push(row("## Insider Trading Disclosures (SEBI PIT Reg 7(2))"));
-    lines.push(row("Window", `${insider.windowFrom} to ${insider.windowTo}`));
-    lines.push(row("Feeds returning data", insider.sources.join(" + ") || "none"));
-    lines.push(
-      row(
+    const rows: CellValue[][] = [
+      ["Insider Trading Disclosures (SEBI PIT)"],
+      ["Window", `${insider.windowFrom} to ${insider.windowTo}`],
+      ["Feeds returning data", insider.sources.join(" + ") || "none"],
+      [],
+      [
         "Disclosure Date",
         "Person",
         "Category",
@@ -125,64 +120,57 @@ export function buildDashboardCsv(input: DashboardExportInput): string {
         "Holding After %",
         "Mode",
         "Source",
-      ),
-    );
+      ],
+    ];
     for (const t of insider.trades) {
-      lines.push(
-        row(
-          t.disclosureDate,
-          t.personName,
-          t.personCategory ?? "",
-          t.transactionType,
-          t.quantity,
-          t.value ?? "",
-          t.sharesAfterPct ?? "",
-          t.mode ?? "",
-          t.source,
-        ),
-      );
+      rows.push([
+        t.disclosureDate,
+        t.personName,
+        t.personCategory ?? "",
+        t.transactionType,
+        t.quantity,
+        t.value ?? "",
+        t.sharesAfterPct ?? "",
+        t.mode ?? "",
+        t.source,
+      ]);
     }
-    lines.push("");
+    sheets.push({ name: "Insider", rows });
   }
 
   // ---- Shareholding Pattern (history, via Munshot) ----------------------
   if (history && history.groups.length > 0) {
-    lines.push(row("## Shareholding Pattern History (Munshot)"));
-    lines.push(row("Holder / Category", ...history.quarters));
+    const rows: CellValue[][] = [
+      ["Shareholding Pattern History (Munshot)"],
+      [],
+      ["Holder / Category", ...history.quarters],
+    ];
     for (const g of history.groups) {
-      lines.push(row(g.category, ...history.quarters.map((_, i) => g.subtotal[i] ?? "")));
+      rows.push([g.category, ...history.quarters.map((_, i) => g.subtotal[i] ?? "")]);
       for (const h of g.holders) {
-        lines.push(row(`  ${h.label}`, ...history.quarters.map((_, i) => h.cells[i] ?? "")));
+        rows.push([`  ${h.label}`, ...history.quarters.map((_, i) => h.cells[i] ?? "")]);
       }
     }
     if (history.shareholders) {
-      lines.push(
-        row(history.shareholders.label, ...history.quarters.map((_, i) => history.shareholders!.cells[i] ?? "")),
-      );
+      const sh = history.shareholders;
+      rows.push([sh.label, ...history.quarters.map((_, i) => sh.cells[i] ?? "")]);
     }
-    lines.push("");
+    sheets.push({ name: "Pattern History", rows });
   }
 
-  return lines.join("\r\n");
+  return sheets;
 }
 
-/** Trigger a client-side download of `csv` as `filename`. */
-export function downloadCsv(filename: string, csv: string): void {
-  // Prepend a BOM (U+FEFF) so Excel reads UTF-8 correctly.
-  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+/** Build the workbook and trigger a client-side .xlsx download. */
+export function exportDashboardXlsx(input: DashboardExportInput): void {
+  const sheets = buildDashboardSheets(input);
+  const blob = buildXlsxBlob(sheets);
+  downloadBlob(exportFilename(input.company, input.generatedAt), blob);
 }
 
 /** A safe, dated filename for the current company's export. */
 export function exportFilename(company: SelectedCompany, generatedAt: string): string {
   const safe = (company.ticker || company.name || "company").replace(/[^A-Za-z0-9_-]+/g, "_");
   const date = generatedAt.slice(0, 10);
-  return `shareholding_${safe}_${date}.csv`;
+  return `shareholding_${safe}_${date}.xlsx`;
 }

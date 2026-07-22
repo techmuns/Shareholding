@@ -32,12 +32,14 @@ disclosures.
   - **Host-context auto-select** — when the host supplies a selected ticker via the
     SDK, the dashboard auto-selects that company and loads all four cards
     (skipping the picker), and reacts to host ticker changes without a refresh.
-    The manual picker is the fallback; a user "Change" override sticks until the
-    host pushes a new ticker. Each selection publishes `shareholding.company.select`.
-  - **Header actions** — **Refresh** (re-fetches all cards; keeps prior data
-    visible with a spinner rather than blanking) and **Export** (downloads the
-    current company's data as a single, sectioned CSV — Summary, Trend, Holders,
-    Insider — stamped with company/quarter/as-of).
+    The manual picker is the fallback; a user override (via the header back
+    button) sticks until the host pushes a new ticker. Each selection publishes
+    `shareholding.company.select`.
+  - **Header actions** — a **back** button (left of the title, returns to the
+    company selector), **Refresh** (re-fetches all cards; keeps prior data visible
+    with a spinner rather than blanking) and **Export** (downloads the current
+    company's data as a multi-sheet **Excel** workbook — Overview, Summary, Trend,
+    Holders, Insider, Pattern History — built with a small dependency-free writer).
   - **Live snapshot handler** — `dashboard.capture.snapshot` returns the current
     `{ context, selection, data }` (loaded sections only); `dashboard.capture.visual`
     captures Zone 2 as a Blob.
