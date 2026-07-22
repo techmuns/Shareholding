@@ -179,3 +179,53 @@ export type InsiderSuccess = { ok: true } & InsiderDisclosures;
 
 /** `POST /api/insider/disclosures` response. */
 export type InsiderResponse = InsiderSuccess | BseFailure;
+
+// ---------------------------------------------------------------------------
+// Combined financials — Munshot filings API (added this session)
+// ---------------------------------------------------------------------------
+
+/** A single key metric from the "Stock details" block (e.g. Market Cap, P/E). */
+export interface FinancialMetric {
+  label: string;
+  value: string; // pre-formatted display string (e.g. "₹ 18,00,089 Cr.")
+}
+
+/** A generic financial-statement table (period columns + labeled rows). */
+export interface FinancialsTable {
+  /** Column headers, excluding the leading row-label column (e.g. "Mar 2025"). */
+  columns: string[];
+  rows: FinancialsRow[];
+}
+
+export interface FinancialsRow {
+  label: string; // the row's leading label cell (e.g. "Net Profit +")
+  cells: string[]; // one display string per `columns` entry ("" for blanks)
+}
+
+/**
+ * Parsed company fundamentals from the Munshot `combined_financials` endpoint.
+ * The upstream returns a Markdown document; the Worker parses it into this
+ * structured shape (pure, never throws — missing sections are simply absent).
+ */
+export interface CombinedFinancials {
+  symbol: string;
+  companyName: string;
+  asOf: string; // ISO fetch timestamp
+  basis: string; // statement basis, e.g. "consolidated" / "standalone"
+  period: string; // reporting period, e.g. "annual" / "quarterly"
+  about: string; // company profile paragraph ("" if none)
+  pros: string[]; // analyst "pros" bullets
+  cons: string[]; // analyst "cons" bullets
+  metrics: FinancialMetric[]; // stock-detail KPIs
+  profitAndLoss?: FinancialsTable;
+  balanceSheet?: FinancialsTable;
+  quarterly?: FinancialsTable;
+  peers?: FinancialsTable;
+  source: string; // provenance label (e.g. "Munshot")
+  note: string;
+}
+
+export type CombinedFinancialsSuccess = { ok: true } & CombinedFinancials;
+
+/** `POST /api/financials/combined` response. */
+export type CombinedFinancialsResponse = CombinedFinancialsSuccess | BseFailure;

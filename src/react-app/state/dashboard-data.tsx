@@ -18,12 +18,14 @@ import {
 } from "react";
 import type { HolderCategory } from "@shared/types";
 import {
+  getCombinedFinancials,
   getInsiderDisclosures,
   getShareholdingHolders,
   getShareholdingPattern,
 } from "@/lib/api";
 import {
   isIndiaCountry,
+  type FinancialsState,
   type HoldersState,
   type InsiderState,
   type PatternState,
@@ -39,6 +41,7 @@ interface DashboardData {
   patternState: PatternState;
   holdersState: HoldersState;
   insiderState: InsiderState;
+  financialsState: FinancialsState;
   isRefreshing: boolean;
   lastRefreshed: string | null; // ISO
   refresh: () => void;
@@ -61,6 +64,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const [patternState, setPatternState] = useState<PatternState>(LOADING);
   const [holdersState, setHoldersState] = useState<HoldersState>(LOADING);
   const [insiderState, setInsiderState] = useState<InsiderState>(LOADING);
+  const [financialsState, setFinancialsState] = useState<FinancialsState>(LOADING);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -75,6 +79,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       setPatternState(LOADING);
       setHoldersState(LOADING);
       setInsiderState(LOADING);
+      setFinancialsState(LOADING);
       lastKeyRef.current = null;
       return;
     }
@@ -89,6 +94,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       setPatternState({ status: "unavailable" });
       setHoldersState({ status: "unavailable" });
       setInsiderState({ status: "unavailable" });
+      setFinancialsState({ status: "unavailable" });
       setLastRefreshed(new Date().toISOString());
       return;
     }
@@ -99,6 +105,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       setPatternState(LOADING);
       setHoldersState(LOADING);
       setInsiderState(LOADING);
+      setFinancialsState(LOADING);
     }
 
     const controller = new AbortController();
@@ -143,7 +150,22 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    Promise.allSettled([pPattern, pHolders, pInsider]).then(() => {
+    const pFinancials = (async () => {
+      try {
+        const res = await getCombinedFinancials(
+          { ticker: company.ticker, country: company.country, name: company.name },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        if (res.ok) setFinancialsState({ status: "done", financials: res });
+        else if (res.code === "not_found") setFinancialsState({ status: "unavailable" });
+        else setFinancialsState({ status: "error", message: res.message });
+      } catch {
+        /* aborted */
+      }
+    })();
+
+    Promise.allSettled([pPattern, pHolders, pInsider, pFinancials]).then(() => {
       if (controller.signal.aborted) return;
       setIsRefreshing(false);
       setLastRefreshed(new Date().toISOString());
@@ -156,11 +178,13 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const hasAnyData =
       patternState.status === "done" ||
       holdersState.status === "done" ||
-      insiderState.status === "done";
+      insiderState.status === "done" ||
+      financialsState.status === "done";
     return {
       patternState,
       holdersState,
       insiderState,
+      financialsState,
       isRefreshing,
       lastRefreshed,
       refresh: () => setRefreshNonce((n) => n + 1),
@@ -170,7 +194,16 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       insiderSort,
       setInsiderSort,
     };
-  }, [patternState, holdersState, insiderState, isRefreshing, lastRefreshed, holdersTab, insiderSort]);
+  }, [
+    patternState,
+    holdersState,
+    insiderState,
+    financialsState,
+    isRefreshing,
+    lastRefreshed,
+    holdersTab,
+    insiderSort,
+  ]);
 
   return <DashboardDataContext.Provider value={value}>{children}</DashboardDataContext.Provider>;
 }

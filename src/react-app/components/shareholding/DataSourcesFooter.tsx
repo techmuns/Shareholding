@@ -66,11 +66,13 @@ function SourceTile({
 }
 
 export function DataSourcesFooter() {
-  const { patternState, holdersState, insiderState, lastRefreshed } = useDashboardData();
+  const { patternState, holdersState, insiderState, financialsState, lastRefreshed } =
+    useDashboardData();
 
   const pattern = patternState.status === "done" ? patternState.pattern : undefined;
   const holders = holdersState.status === "done" ? holdersState.holders : undefined;
   const insider = insiderState.status === "done" ? insiderState.insider : undefined;
+  const financials = financialsState.status === "done" ? financialsState.financials : undefined;
 
   const patternDetail = pattern
     ? `BSE India · shareholding pattern · as of ${pattern.latest.qtrLabel}`
@@ -90,6 +92,10 @@ export function DataSourcesFooter() {
     insiderDetail = "SEBI PIT insider dealings · via Munshot filings API";
   }
 
+  const financialsDetail = financials
+    ? `Munshot · fundamentals & statements · ${financials.basis} · ${financials.period}`
+    : "Munshot · fundamentals & financial statements";
+
   const refreshedWhen = lastRefreshed ? formatAsOf(lastRefreshed) : "—";
 
   return (
@@ -107,6 +113,7 @@ export function DataSourcesFooter() {
         }}
       >
         <SourceTile title="Summary & Trend" detail={patternDetail} status={patternState.status} />
+        <SourceTile title="Fundamentals & Statements" detail={financialsDetail} status={financialsState.status} />
         <SourceTile title="Individual Holders" detail={holdersDetail} status={holdersState.status} />
         <SourceTile title="Insider Disclosures" detail={insiderDetail} status={insiderState.status} />
       </div>

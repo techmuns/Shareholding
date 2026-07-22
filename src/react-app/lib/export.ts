@@ -1,6 +1,8 @@
 // CSV export — a single, self-explanatory .csv with clearly-labeled sections.
 // No new dependencies; proper RFC-4180-style escaping.
 import type {
+  CombinedFinancialsSuccess,
+  FinancialsTable,
   HoldersSuccess,
   InsiderSuccess,
   SelectedCompany,
@@ -29,6 +31,18 @@ export interface DashboardExportInput {
   pattern?: ShareholdingPatternSuccess;
   holders?: HoldersSuccess;
   insider?: InsiderSuccess;
+  financials?: CombinedFinancialsSuccess;
+}
+
+/** Emit a labeled financial-statement table as CSV rows (header + data rows). */
+function pushTable(lines: string[], heading: string, table: FinancialsTable | undefined): void {
+  if (!table || table.rows.length === 0) return;
+  lines.push(row(`## ${heading}`));
+  lines.push(row("", ...table.columns));
+  for (const r of table.rows) {
+    lines.push(row(r.label, ...table.columns.map((_, i) => r.cells[i] ?? "")));
+  }
+  lines.push("");
 }
 
 /**
@@ -36,7 +50,7 @@ export interface DashboardExportInput {
  * loaded card. Sections that didn't load are simply omitted.
  */
 export function buildDashboardCsv(input: DashboardExportInput): string {
-  const { company, generatedAt, pattern, holders, insider } = input;
+  const { company, generatedAt, pattern, holders, insider, financials } = input;
   const lines: string[] = [];
 
   // ---- Stamp -------------------------------------------------------------
@@ -141,6 +155,31 @@ export function buildDashboardCsv(input: DashboardExportInput): string {
       );
     }
     lines.push("");
+  }
+
+  // ---- Fundamentals & financial statements ------------------------------
+  if (financials) {
+    if (financials.metrics.length > 0) {
+      lines.push(row("## Key Metrics"));
+      lines.push(row("Metric", "Value"));
+      for (const m of financials.metrics) lines.push(row(m.label, m.value));
+      lines.push("");
+    }
+    if (financials.pros.length > 0 || financials.cons.length > 0) {
+      lines.push(row("## Highlights"));
+      for (const p of financials.pros) lines.push(row("Pro", p));
+      for (const cn of financials.cons) lines.push(row("Con", cn));
+      lines.push("");
+    }
+    if (financials.about) {
+      lines.push(row("## About"));
+      lines.push(row(financials.about));
+      lines.push("");
+    }
+    pushTable(lines, "Profit & Loss", financials.profitAndLoss);
+    pushTable(lines, "Balance Sheet", financials.balanceSheet);
+    pushTable(lines, "Quarterly Results", financials.quarterly);
+    pushTable(lines, "Peer Comparison", financials.peers);
   }
 
   return lines.join("\r\n");

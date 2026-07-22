@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Landmark } from "lucide-react";
 import type {
+  CombinedFinancialsSuccess,
   HoldersSuccess,
   InsiderSuccess,
   ShareholdingPatternSuccess,
@@ -23,6 +24,11 @@ export type HoldersState = NonDoneStatus | { status: "done"; holders: HoldersSuc
 
 /** State for the insider-disclosures card (its own fetch). */
 export type InsiderState = NonDoneStatus | { status: "done"; insider: InsiderSuccess };
+
+/** State for the combined-financials cards (its own fetch). */
+export type FinancialsState =
+  | NonDoneStatus
+  | { status: "done"; financials: CombinedFinancialsSuccess };
 
 /** Treat empty/unknown as India (so we still try); only skip clearly non-Indian. */
 export function isIndiaCountry(country: string): boolean {
@@ -85,6 +91,20 @@ export function InsiderStateGate({
 }) {
   if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
   return <>{children(state.insider)}</>;
+}
+
+/** Same gate, for the combined-financials cards. */
+export function FinancialsStateGate({
+  state,
+  loadingRows = 6,
+  children,
+}: {
+  state: FinancialsState;
+  loadingRows?: number;
+  children: (financials: CombinedFinancialsSuccess) => ReactNode;
+}) {
+  if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
+  return <>{children(state.financials)}</>;
 }
 
 export function formatAsOf(iso: string): string {

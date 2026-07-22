@@ -1,6 +1,7 @@
 // Frontend API client for the Worker proxy.
 import type {
   BseResolveResponse,
+  CombinedFinancialsResponse,
   HoldersResponse,
   InsiderResponse,
   ShareholdingPatternResponse,
@@ -136,6 +137,33 @@ export async function getInsiderDisclosures(
       ok: false,
       code: "provider_error",
       message: "Could not reach the disclosures service. Please try again.",
+    };
+  }
+}
+
+/**
+ * POST /api/financials/combined — company fundamentals & financial statements
+ * via the Munshot filings API. Accepts the ticker, country, statement basis
+ * (`q`: consolidated/standalone) and reporting period (annual/quarterly).
+ */
+export async function getCombinedFinancials(
+  input: { ticker?: string; symbol?: string; country?: string; q?: string; period?: string; name?: string },
+  signal?: AbortSignal,
+): Promise<CombinedFinancialsResponse> {
+  try {
+    const res = await fetch("/api/financials/combined", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      signal,
+    });
+    return (await res.json()) as CombinedFinancialsResponse;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    return {
+      ok: false,
+      code: "provider_error",
+      message: "Could not reach the financials service. Please try again.",
     };
   }
 }

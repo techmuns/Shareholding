@@ -6,6 +6,7 @@ import { bseResolveRoute } from "./bse/resolveRoute";
 import { shareholdingPatternRoute } from "./shareholding/patternRoute";
 import { shareholdingHoldersRoute } from "./shareholding/holdersRoute";
 import { insiderDisclosuresRoute } from "./insider/disclosuresRoute";
+import { combinedFinancialsRoute } from "./financials/combinedRoute";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -22,6 +23,7 @@ app.post("/api/bse/resolve", bseResolveRoute);
 app.post("/api/shareholding/pattern", shareholdingPatternRoute);
 app.post("/api/shareholding/holders", shareholdingHoldersRoute);
 app.post("/api/insider/disclosures", insiderDisclosuresRoute);
+app.post("/api/financials/combined", combinedFinancialsRoute);
 
 // Anything not matched above:
 //  - /api/* -> JSON 404

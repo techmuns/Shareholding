@@ -1,9 +1,10 @@
 // Shareholding dashboard.
 //
-// All four cards are wired to live data via the shared dashboard-data store:
+// Every card is wired to live data via the shared dashboard-data store:
 // "Shareholding Summary", "Promoter / FII / DII Trend" and "Individual Holders"
-// from BSE shareholding-pattern feeds, and "Insider Trading Disclosures" from
-// SEBI PIT Reg 7(2) feeds (NSE primary, BSE fallback). Each card fetches
+// from BSE shareholding-pattern feeds; "Insider Trading Disclosures" from the
+// Munshot filings API (SEBI PIT); and "Company Fundamentals" + "Financial
+// Statements" from the Munshot combined-financials feed. Each card fetches
 // independently — one failing never blanks the others.
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -13,12 +14,14 @@ import { ShareholdingSummaryCard } from "@/components/shareholding/ShareholdingS
 import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTrendCard";
 import { IndividualHoldersCard } from "@/components/shareholding/IndividualHoldersCard";
 import { InsiderDisclosuresCard } from "@/components/shareholding/InsiderDisclosuresCard";
+import { CompanyFundamentalsCard } from "@/components/shareholding/CompanyFundamentalsCard";
+import { FinancialStatementsCard } from "@/components/shareholding/FinancialStatementsCard";
 import { DataSourcesFooter } from "@/components/shareholding/DataSourcesFooter";
 
 export default function ShareholdingPage() {
   const { company } = useSelectedCompany();
   const navigate = useNavigate();
-  const { patternState, holdersState, insiderState } = useDashboardData();
+  const { patternState, holdersState, insiderState, financialsState } = useDashboardData();
 
   // No company selected — return to the selector home screen.
   useEffect(() => {
@@ -41,6 +44,8 @@ export default function ShareholdingPage() {
       <div className="dash-grid">
         <ShareholdingSummaryCard state={patternState} />
         <ShareholdingTrendCard state={patternState} />
+        <CompanyFundamentalsCard state={financialsState} />
+        <FinancialStatementsCard state={financialsState} />
         <IndividualHoldersCard state={holdersState} />
         <InsiderDisclosuresCard state={insiderState} />
         <DataSourcesFooter />
