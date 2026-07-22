@@ -82,15 +82,12 @@ export function DataSourcesFooter() {
 
   let insiderDetail: string;
   if (insider) {
-    const feeds = insider.sources;
-    let provenance: string;
-    if (feeds.length === 0) provenance = "NSE & BSE checked — no disclosures returned";
-    else if (feeds.includes("NSE") && feeds.includes("BSE")) provenance = "NSE + BSE";
-    else if (feeds.includes("BSE")) provenance = "NSE unavailable — BSE provided the data";
-    else provenance = "NSE";
-    insiderDetail = `SEBI PIT Reg 7(2) · ${provenance} · window ${insider.windowFrom} – ${insider.windowTo}`;
+    const provider = insider.sources.length > 0 ? insider.sources.join(" · ") : "Munshot";
+    const range =
+      insider.trades.length > 0 ? ` · ${insider.windowFrom} – ${insider.windowTo}` : "";
+    insiderDetail = `SEBI PIT insider dealings · via Munshot (${provider})${range}`;
   } else {
-    insiderDetail = "SEBI PIT Reg 7(2) · NSE (primary) + BSE (fallback)";
+    insiderDetail = "SEBI PIT insider dealings · via Munshot filings API";
   }
 
   const refreshedWhen = lastRefreshed ? formatAsOf(lastRefreshed) : "—";

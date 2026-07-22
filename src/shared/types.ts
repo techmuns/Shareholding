@@ -56,6 +56,7 @@ export interface SelectedCompany {
 export type BseErrorCode =
   | "invalid_request"
   | "not_found"
+  | "not_configured"
   | "timeout"
   | "upstream_error"
   | "provider_error";
@@ -141,7 +142,8 @@ export type HoldersResponse = HoldersSuccess | BseFailure;
 // Insider trading disclosures — SEBI PIT Reg 7(2) (added this session)
 // ---------------------------------------------------------------------------
 
-export type InsiderSource = "NSE" | "BSE";
+/** Data provider that supplied a disclosure (e.g. "TRENDLYNE", "BSE", "NSE"). */
+export type InsiderSource = string;
 
 export type InsiderTxnType = "buy" | "sell" | "pledge" | "revoke" | "other";
 

@@ -131,7 +131,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     const pInsider = (async () => {
       try {
         const res = await getInsiderDisclosures(
-          { symbol: company.ticker, name: company.name, query: company.name || company.ticker },
+          { ticker: company.ticker, country: company.country, name: company.name },
           controller.signal,
         );
         if (controller.signal.aborted) return;

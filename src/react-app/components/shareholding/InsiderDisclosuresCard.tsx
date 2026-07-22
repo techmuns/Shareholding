@@ -210,7 +210,7 @@ export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
   return (
     <WidgetCard
       title="Insider Trading Disclosures"
-      subtitle="SEBI PIT Reg 7(2) · last 12 months"
+      subtitle="Insider dealings (SEBI PIT) · via Munshot"
       className="span-12"
     >
       <InsiderStateGate state={state} loadingRows={6}>
@@ -219,9 +219,7 @@ export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
           const buys = trades.filter((t) => t.transactionType === "buy").length;
           const sells = trades.filter((t) => t.transactionType === "sell").length;
           const sourceLabel =
-            insider.sources.length > 0
-              ? insider.sources.join(" · ")
-              : "NSE · BSE (none returned)";
+            insider.sources.length > 0 ? insider.sources.join(" · ") : "Munshot";
 
           return (
             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -253,10 +251,10 @@ export function InsiderDisclosuresCard({ state }: { state: InsiderState }) {
                     <Inbox size={20} />
                   </div>
                   <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#374151" }}>
-                    No insider trading disclosures reported for this company in the last 12 months.
+                    No insider trading disclosures found for this company.
                   </p>
                   <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                    This is common and normal — many companies report none in a given window.
+                    This is common and normal — many companies have none on record.
                   </p>
                 </div>
               ) : (

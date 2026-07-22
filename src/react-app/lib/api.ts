@@ -115,12 +115,11 @@ export async function getShareholdingHolders(
 }
 
 /**
- * POST /api/insider/disclosures — SEBI PIT Reg 7(2) insider-trading disclosures
- * (NSE primary, BSE fallback) for the last ~12 months. Accepts the NSE symbol,
- * a scrip code, and/or a company name.
+ * POST /api/insider/disclosures — insider-trading (SEBI PIT) disclosures via the
+ * Munshot filings API. Accepts the ticker and country.
  */
 export async function getInsiderDisclosures(
-  input: { symbol?: string; scripCode?: string; name?: string; ticker?: string; query?: string },
+  input: { ticker?: string; symbol?: string; country?: string; name?: string },
   signal?: AbortSignal,
 ): Promise<InsiderResponse> {
   try {

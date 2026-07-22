@@ -6,6 +6,8 @@
 export interface Env {
   /** Static Assets binding (serves the built SPA from ./dist/client). */
   ASSETS: Fetcher;
-  /** Bearer token for the upstream Munshot stock API (secret, optional at runtime). */
+  /** Bearer token for the upstream Munshot APIs (secret, optional at runtime). */
   MUNS_ACCESS_TOKEN?: string;
+  /** Alternate name for the same Munshot bearer token (either may be set). */
+  MUNS_TOKEN?: string;
 }

@@ -1,36 +1,36 @@
-// POST /api/insider/disclosures — SEBI PIT Reg 7(2) insider disclosures.
+// POST /api/insider/disclosures — insider-trading (SEBI PIT) disclosures.
 //
-// Body: { symbol, scripCode?, name? }. The BSE scrip code is resolved internally
-// when absent. Two sources, fetched server-side, then merged + deduped:
-//   NSE  (primary)      — corporate-insider-trading (best-effort; often IP-blocked)
-//   BSE  (fallback)     — InsiderTrade15 (SEBI PIT 2015 / Reg 7(2))
+// Body: { ticker (or symbol), country?, name? }. Sourced from the Munshot filings
+// API, which is token-authenticated (so it isn't IP-blocked like the exchanges):
+//   POST https://devde.muns.io/filings/data/insider_trades  { ticker, country }
+// with `Authorization: Bearer <MUNS token>`.
 //
 // Safe-failure contract (HTTP 200):
-//   - non-Indian company            -> not_found
-//   - both feeds reachable, 0 rows  -> { ok:true, trades:[] }  (common & normal)
-//   - both feeds failed to fetch    -> upstream_error / timeout
-// Never log upstream bodies or cookies.
+//   - missing token         -> not_configured
+//   - missing ticker        -> invalid_request
+//   - reachable, 0 rows     -> { ok:true, trades:[] }   (normal)
+//   - upstream unreachable  -> timeout / upstream_error / provider_error
+// Never log the token, the Authorization header, or the upstream body.
 
 import type { Context } from "hono";
 import type { InsiderResponse, InsiderSource, InsiderTrade } from "@shared/types";
-import {
-  mergeInsiderTrades,
-  normalizeBseInsider,
-  normalizeNseInsider,
-} from "@shared/insiderTrading";
+import { mergeInsiderTrades, normalizeMunshotInsider, parseInsiderDateMs } from "@shared/insiderTrading";
 import type { Env } from "../env";
-import { BSE_API_BASE, bodyString, bseFetch, clientSignalOf, safeJson } from "../bse/client";
-import { NOT_AVAILABLE_MESSAGE, bseFailureMessage, resolveScrip } from "../bse/resolveRoute";
-import { fetchNseInsider } from "../nse/client";
+import { bodyString, clientSignalOf } from "../bse/client";
 
 type Handler = (c: Context<{ Bindings: Env }>) => Promise<Response>;
 
-const WINDOW_DAYS = 365;
-const NOTE = "SEBI PIT Reg 7(2) disclosures";
+const UPSTREAM_URL = "https://devde.muns.io/filings/data/insider_trades";
+const UPSTREAM_TIMEOUT_MS = 15_000;
+const MAX_TRADES = 250;
+const NOTE = "SEBI PIT insider dealings · via Munshot (Trendlyne)";
+const DEFAULT_COUNTRY = "India";
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export const insiderDisclosuresRoute: Handler = async (c) => {
   const json = (body: InsiderResponse) => c.json(body);
-  const signal = clientSignalOf(c.req.raw);
+  const clientSignal = clientSignalOf(c.req.raw);
 
   let payload: unknown;
   try {
@@ -40,81 +40,106 @@ export const insiderDisclosuresRoute: Handler = async (c) => {
   }
 
   const body = payload as
-    | { symbol?: unknown; scripCode?: unknown; name?: unknown; ticker?: unknown; query?: unknown }
+    | { ticker?: unknown; symbol?: unknown; country?: unknown; name?: unknown }
     | null;
-  const symbol = bodyString(body?.symbol) || bodyString(body?.ticker);
-  let scripCode = bodyString(body?.scripCode).replace(/\D/g, "");
-  let companyName = bodyString(body?.name);
+  const ticker = bodyString(body?.ticker) || bodyString(body?.symbol);
+  const country = bodyString(body?.country) || DEFAULT_COUNTRY;
+  const companyName = bodyString(body?.name) || ticker;
 
-  if (!symbol && !scripCode) {
+  if (!ticker) {
+    return json({ ok: false, code: "invalid_request", message: "Provide a ticker symbol." });
+  }
+
+  const token = c.env.MUNS_ACCESS_TOKEN ?? c.env.MUNS_TOKEN;
+  if (!token) {
     return json({
       ok: false,
-      code: "invalid_request",
-      message: "Provide a symbol, scrip code, or company name.",
+      code: "not_configured",
+      message: "Insider data isn't configured yet. Set the MUNS_ACCESS_TOKEN secret to enable it.",
     });
   }
 
-  // ---- Resolve the BSE scrip code when not supplied ---------------------
-  if (!scripCode) {
-    const resolved = await resolveScrip(
-      { name: bodyString(body?.name), ticker: symbol, query: bodyString(body?.query) },
-      signal,
-    );
-    if (resolved.ok) {
-      scripCode = resolved.scripCode;
-      companyName = resolved.bseName;
-    } else if (resolved.code === "not_found") {
-      return json({ ok: false, code: "not_found", message: NOT_AVAILABLE_MESSAGE });
+  // ---- Fetch upstream (15s timeout, forwarding the client's abort) ------
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, UPSTREAM_TIMEOUT_MS);
+  if (clientSignal) {
+    if (clientSignal.aborted) controller.abort();
+    else clientSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  try {
+    const upstream = await fetch(UPSTREAM_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ticker, country }),
+      signal: controller.signal,
+    });
+
+    if (!upstream.ok) {
+      return json({
+        ok: false,
+        code: "upstream_error",
+        message: "The insider data provider is temporarily unavailable. Please try again.",
+      });
     }
-    // Transient resolve error -> continue NSE-only (best-effort).
+
+    let raw: unknown;
+    try {
+      raw = await upstream.json();
+    } catch {
+      return json({
+        ok: false,
+        code: "provider_error",
+        message: "The insider data provider returned an unreadable response.",
+      });
+    }
+
+    // Normalize, dedupe, sort newest-first (wide window = no date filtering), cap.
+    const all = normalizeMunshotInsider(raw);
+    const sorted = mergeInsiderTrades(all, 0, Number.MAX_SAFE_INTEGER);
+    const trades: InsiderTrade[] = sorted.slice(0, MAX_TRADES);
+
+    // Freshness window = the actual span of the disclosures shown.
+    let windowFrom = todayIso();
+    let windowTo = todayIso();
+    const stamps = trades
+      .map((t) => parseInsiderDateMs(t.disclosureDate))
+      .filter((ms): ms is number => ms != null);
+    if (stamps.length > 0) {
+      windowFrom = new Date(Math.min(...stamps)).toISOString().slice(0, 10);
+      windowTo = new Date(Math.max(...stamps)).toISOString().slice(0, 10);
+    }
+
+    const sources: InsiderSource[] = [...new Set(trades.map((t) => t.source).filter(Boolean))];
+
+    return json({
+      ok: true,
+      symbol: ticker,
+      companyName,
+      asOf: new Date().toISOString(),
+      windowFrom,
+      windowTo,
+      trades,
+      sources,
+      note: NOTE,
+    });
+  } catch {
+    return json({
+      ok: false,
+      code: timedOut ? "timeout" : "provider_error",
+      message: timedOut
+        ? "Insider data took too long to respond. Please try again."
+        : "Could not reach the insider data provider. Please try again.",
+    });
+  } finally {
+    clearTimeout(timer);
   }
-
-  // ---- Fetch both feeds in parallel -------------------------------------
-  const [nseRes, bseRes] = await Promise.all([
-    symbol ? fetchNseInsider(symbol, signal) : Promise.resolve({ ok: false } as const),
-    scripCode
-      ? bseFetch(
-          `${BSE_API_BASE}/InsiderTrade15/w?fromdt=&todt=&pageno=1&scripcode=${scripCode}`,
-          signal,
-        )
-      : Promise.resolve({ ok: false as const, code: "upstream_error" as const }),
-  ]);
-
-  const nseTrades = nseRes.ok ? normalizeNseInsider(safeJson(nseRes.text)) : [];
-  const bseTrades = bseRes.ok ? normalizeBseInsider(safeJson(bseRes.text)) : [];
-
-  // Both feeds failed to fetch (not merely empty) -> a genuine error.
-  const nseFetched = nseRes.ok;
-  const bseFetched = bseRes.ok;
-  if (!nseFetched && !bseFetched) {
-    const code = !scripCode ? "not_found" : "upstream_error";
-    return json(
-      code === "not_found"
-        ? { ok: false, code, message: NOT_AVAILABLE_MESSAGE }
-        : { ok: false, code, message: bseFailureMessage("upstream_error") },
-    );
-  }
-
-  // ---- Window filter + merge + dedupe + sort ----------------------------
-  const now = Date.now();
-  const toMs = now;
-  const fromMs = now - WINDOW_DAYS * 24 * 60 * 60 * 1000;
-  const trades: InsiderTrade[] = mergeInsiderTrades([...nseTrades, ...bseTrades], fromMs, toMs);
-
-  const sources: InsiderSource[] = [];
-  if (trades.some((t) => t.source === "NSE")) sources.push("NSE");
-  if (trades.some((t) => t.source === "BSE")) sources.push("BSE");
-
-  return json({
-    ok: true,
-    symbol,
-    scripCode: scripCode || undefined,
-    companyName: companyName || symbol || (scripCode ? `BSE ${scripCode}` : ""),
-    asOf: new Date(now).toISOString(),
-    windowFrom: new Date(fromMs).toISOString().slice(0, 10),
-    windowTo: new Date(toMs).toISOString().slice(0, 10),
-    trades,
-    sources,
-    note: NOTE,
-  });
 };

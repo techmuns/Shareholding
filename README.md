@@ -22,8 +22,8 @@ disclosures.
     recent quarters — wired to BSE.
   - **Individual Holders** — tabbed, sortable tables of named Promoter / FII·FPI /
     DII / Other-Public holders (with promoter pledge %) — wired to BSE.
-  - **Insider Trading Disclosures** — sortable table of SEBI PIT Reg 7(2) filings
-    (last 12 months) with buy/sell/pledge chips — wired to NSE (primary) + BSE.
+  - **Insider Trading Disclosures** — sortable table of SEBI PIT insider dealings
+    with buy/sell/pledge chips — wired to the Munshot filings API (Trendlyne).
 - **Embeddability & polish** (works standalone or embedded in Munshot):
   - **Host-context auto-select** — when the host supplies a selected ticker via the
     SDK, the dashboard auto-selects that company and loads all four cards
@@ -53,8 +53,8 @@ disclosures.
     BSE requires; non-Indian companies return a clean `not_found`.
   - `POST /api/shareholding/holders` — named individual holders (promoters,
     FII/FPI, DII, other public) for the latest quarter, with promoter pledge %.
-  - `POST /api/insider/disclosures` — SEBI PIT Reg 7(2) insider-trading
-    disclosures (last ~12 months), merged from NSE (primary) + BSE (fallback).
+  - `POST /api/insider/disclosures` — SEBI PIT insider-trading disclosures from
+    the token-authenticated Munshot filings API (`filings/data/insider_trades`).
 
 ## Tech stack
 
@@ -166,7 +166,7 @@ No secret values live in the repo. `.dev.vars` is git-ignored; only
 | POST   | `/api/bse/resolve`          | Body `{ query?, ticker?, name? }` → `{ scripCode, bseName }`.|
 | POST   | `/api/shareholding/pattern` | Body `{ scripCode }` or `{ query/ticker/name }` → pattern.   |
 | POST   | `/api/shareholding/holders` | Body `{ scripCode }` or `{ query/ticker/name }` (+ `qtrId?`) → holders. |
-| POST   | `/api/insider/disclosures`  | Body `{ symbol, scripCode?, name? }` → SEBI PIT Reg 7(2) trades. |
+| POST   | `/api/insider/disclosures`  | Body `{ ticker, country?, name? }` → SEBI PIT insider trades (Munshot). |
 
 All POST routes use the safe-failure contract (always HTTP 200; success is
 `{ ok:true, ... }`, failures are `{ ok:false, code, message }`).
@@ -185,17 +185,15 @@ The shareholding routes call BSE's public JSON APIs under
   individual public/institutional holders (classified by the section they sit in).
 - `Corp_shpPromoterNGroup_ng/w?SCRIPCODE=&QtrCode=` — named promoter & promoter-
   group entities with shares, % holding and pledge/encumbrance %.
-- `InsiderTrade15/w?fromdt=&todt=&pageno=1&scripcode=<code>` — SEBI PIT 2015
-  (Reg 7(2)) insider-trading disclosures (empty date params return the recent
-  set; the Worker filters to the last 12 months). `InsiderTrade92` is the legacy
-  1992-regime table and is not used.
 
-Insider disclosures also try NSE first —
-`GET https://www.nseindia.com/api/corporate-insider-trading?index=equities&symbol=<SYM>`
-— behind a manual cookie handshake (bootstrap `get-quotes` page → forward
-`set-cookie`). NSE frequently blocks datacenter/Cloudflare egress IPs (Akamai),
-so any NSE failure is a soft miss that falls through to BSE; the card's source
-line reflects whichever feed actually returned rows.
+**Insider disclosures** come from the token-authenticated **Munshot filings API**
+(same host and bearer token as the company search):
+`POST https://devde.muns.io/filings/data/insider_trades` with body
+`{ ticker, country }` and `Authorization: Bearer <MUNS token>`. It returns SEBI
+PIT insider dealings (Company / Insider / Category / Transaction / Trade Shares /
+Trade Value / Post-Holding % / Mode / Broadcast Date / Source, e.g. Trendlyne).
+The token is read from `MUNS_ACCESS_TOKEN` (or `MUNS_TOKEN`); with no token the
+insider card shows a `not_configured` state while the BSE cards still load.
 
 Non-Indian (non-BSE) companies resolve to `not_found`, which the UI renders as a
 clean "not available" empty state.
@@ -204,18 +202,17 @@ Non-`/api` routes are served by the SPA (Static Assets fallback).
 
 ## Data sources & known limitations
 
-- **BSE shareholding pattern, individual holders, and insider (SEBI PIT Reg 7(2))**
-  are fetched **server-side in the Worker** with browser-like headers, because
-  BSE returns 403 to plain server requests. This avoids CORS and keeps the flow
-  reliable. All normalizers are pure and never throw — malformed upstream rows
-  degrade to safe defaults (no `NaN%`), so odd/interim quarters and missing
-  category rows render cleanly.
-- **NSE insider is best-effort only.** NSE's Akamai bot manager typically blocks
-  datacenter / Cloudflare egress IPs even with the cookie handshake, so in
-  practice **BSE carries the insider data** and each card's source line shows the
-  feed that actually responded (e.g. "NSE unavailable — BSE provided the data").
-- **Coverage is BSE-listed Indian companies.** Non-Indian tickers surface the
-  clean "not available" state, not an error.
+- **BSE shareholding pattern and individual holders** are fetched **server-side in
+  the Worker** with browser-like headers, because BSE returns 403 to plain server
+  requests. This avoids CORS and keeps the flow reliable. All normalizers are pure
+  and never throw — malformed upstream rows degrade to safe defaults (no `NaN%`),
+  so odd/interim quarters and missing category rows render cleanly.
+- **Insider disclosures come from the Munshot filings API** (Trendlyne-backed),
+  token-authenticated so it isn't IP-blocked like the exchanges. The normalizer
+  matches fields defensively (works whether the API returns display labels,
+  snake_case, or a columns+rows table) and never throws.
+- **Coverage is BSE-listed Indian companies** for the pattern/holders cards;
+  non-Indian tickers surface the clean "not available" state, not an error.
 - **Disclosure thresholds are BSE's:** individual public/institutional holders
   are disclosed only above 1% of total shares; promoter-group entities are listed
   in full. Insider disclosures cover a rolling ~12-month window.

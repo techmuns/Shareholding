@@ -1,19 +1,14 @@
-// Pure normalizer helpers for insider-trading (SEBI PIT Reg 7(2)) payloads.
+// Pure normalizer helpers for insider-trading (SEBI PIT) payloads.
 //
-// Like the other BSE/NSE normalizers, these must NEVER throw — malformed entries
-// degrade to safe defaults rather than raising.
+// These must NEVER throw — malformed entries degrade to safe defaults.
 //
-// Confirmed sources:
-//   BSE  InsiderTrade15/w?fromdt=&todt=&pageno=1&scripcode=<code>
-//        -> { Table: [ SEBI PIT 2015 (Reg 7(2)) continual disclosures ] }
-//        Fields: Fld_PromoterName, Fld_PersonCatgName, Fld_TransactionType,
-//        Fld_SecurityNo, Fld_SecurityValue, Fld_PercentofShareholdingPost,
-//        Fld_FromDate, Fld_ToDate, Fld_LetterDate, ModeOfAquisation,
-//        Fld_SecurityTypeName.
-//   NSE  /api/corporate-insider-trading?index=equities&symbol=<SYM>
-//        -> { data: [ { acqName, personCategory, secAcq, tdpTransactionType,
-//        acqMode, secVal, afterAcqSharesPer, date/intimDate, … } ] }
-//        (best-effort; NSE frequently blocks datacenter egress IPs.)
+// Source: the Munshot filings API
+//   POST https://devde.muns.io/filings/data/insider_trades  { ticker, country }
+// returns rows with columns like: Company, Insider, Category, Security Type,
+// Transaction (Acquisition/Disposal/Pledge/Revoke), Trade Shares, Trade %,
+// Trade Value, Post Holding Shares, Post Holding %, Mode, From Date, To Date,
+// Broadcast Date, Source (e.g. TRENDLYNE). The exact JSON key casing/shape is
+// matched defensively (normalized-key aliases + several container shapes).
 
 import type { InsiderTrade, InsiderTxnType } from "./types";
 
@@ -90,60 +85,121 @@ export function mapTxnType(rawType: string, mode = ""): InsiderTxnType {
   return "other";
 }
 
-/** Normalize BSE InsiderTrade15 (`{ Table: [...] }`) into InsiderTrade[]. */
-export function normalizeBseInsider(raw: unknown): InsiderTrade[] {
-  const table = (raw as { Table?: unknown } | null | undefined)?.Table;
-  if (!Array.isArray(table)) return [];
-
-  const out: InsiderTrade[] = [];
-  for (const row of table as Record<string, unknown>[]) {
-    const personName = asString(row?.Fld_PromoterName).trim();
-    if (!personName) continue;
-
-    const mode = asString(row?.ModeOfAquisation).trim() || asString(row?.Fld_Mode).trim();
-    out.push({
-      personName,
-      personCategory: optString(row?.Fld_PersonCatgName),
-      transactionType: mapTxnType(asString(row?.Fld_TransactionType), mode),
-      securityType: optString(row?.Fld_SecurityTypeName),
-      quantity: asNumber(row?.Fld_SecurityNo),
-      value: optNumber(row?.Fld_SecurityValue),
-      sharesAfterPct: optNumber(row?.Fld_PercentofShareholdingPost),
-      mode: optString(row?.ModeOfAquisation),
-      periodFrom: row?.Fld_FromDate ? toIsoDate(asString(row.Fld_FromDate)) : undefined,
-      periodTo: row?.Fld_ToDate ? toIsoDate(asString(row.Fld_ToDate)) : undefined,
-      disclosureDate: toIsoDate(asString(row?.Fld_LetterDate) || asString(row?.Fld_DateIntimation)),
-      source: "BSE",
-    });
-  }
-  return out;
+/** Normalize a header label / key: lowercase, "%"/"percent" -> "pct", strip rest. */
+function normKey(key: string): string {
+  return key
+    .toLowerCase()
+    .replace(/percent/g, "pct")
+    .replace(/%/g, "pct")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-/** Normalize NSE corporate-insider-trading (`{ data: [...] }`) into InsiderTrade[]. */
-export function normalizeNseInsider(raw: unknown): InsiderTrade[] {
-  const data = (raw as { data?: unknown } | null | undefined)?.data;
-  if (!Array.isArray(data)) return [];
+/** Build a normalized-key getter over a row; prefers non-empty candidates. */
+function rowGetter(row: Record<string, unknown>): (candidates: string[]) => unknown {
+  const map: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) map[normKey(k)] = v;
+  return (candidates) => {
+    for (const c of candidates) {
+      const v = map[c];
+      if (v !== undefined && v !== null && v !== "") return v;
+    }
+    for (const c of candidates) if (c in map) return map[c];
+    return undefined;
+  };
+}
 
+/** Zip parallel `columns` + array-of-arrays `rows` into row objects. */
+function zipRows(cols: unknown, rows: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(cols) || !Array.isArray(rows)) return [];
+  return rows
+    .filter((r): r is unknown[] => Array.isArray(r))
+    .map((r) => {
+      const obj: Record<string, unknown> = {};
+      cols.forEach((c, i) => {
+        obj[asString(c)] = r[i];
+      });
+      return obj;
+    });
+}
+
+/** True array-of-objects (not array-of-arrays); null otherwise. */
+function asObjectRows(value: unknown): Record<string, unknown>[] | null {
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0) return [];
+  if (Array.isArray(value[0])) return null;
+  return value.filter((r) => r && typeof r === "object") as Record<string, unknown>[];
+}
+
+/** Locate the list of insider rows across the shapes the API might return. */
+function extractInsiderRows(raw: unknown): Record<string, unknown>[] {
+  const direct = asObjectRows(raw);
+  if (direct) return direct;
+
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const data = r.data;
+
+  const dataObjs = asObjectRows(data);
+  if (dataObjs) return dataObjs;
+
+  if (Array.isArray(data) && Array.isArray(data[0])) {
+    return zipRows(r.columns ?? r.headers, data);
+  }
+
+  if (data && typeof data === "object") {
+    const dd = data as Record<string, unknown>;
+    const cols = dd.columns ?? dd.headers;
+    const rows = dd.rows ?? dd.data ?? dd.records ?? dd.results;
+    if (Array.isArray(cols) && Array.isArray(rows) && Array.isArray(rows[0])) return zipRows(cols, rows);
+    const objRows = asObjectRows(rows);
+    if (objRows) return objRows;
+  }
+
+  for (const key of ["rows", "results", "records", "insider_trades", "insiderTrades", "trades"]) {
+    const objRows = asObjectRows(r[key]);
+    if (objRows) return objRows;
+  }
+  return [];
+}
+
+function dateOrUndefined(value: unknown): string | undefined {
+  const s = asString(value).trim();
+  return s ? toIsoDate(s) : undefined;
+}
+
+/**
+ * Normalize the Munshot `insider_trades` payload into InsiderTrade[]. Matches
+ * fields by normalized-key aliases so it works whether the API returns display
+ * labels ("Trade Shares"), snake_case (`trade_shares`), or camelCase. Never throws.
+ */
+export function normalizeMunshotInsider(raw: unknown): InsiderTrade[] {
   const out: InsiderTrade[] = [];
-  for (const row of data as Record<string, unknown>[]) {
-    const personName = asString(row?.acqName).trim();
+  for (const row of extractInsiderRows(raw)) {
+    const get = rowGetter(row);
+    const personName = asString(get(["insider", "insidername", "name", "acqname", "personname"])).trim();
     if (!personName) continue;
 
-    const rawType = asString(row?.tdpTransactionType) || asString(row?.acqMode);
-    const mode = asString(row?.acqMode) || asString(row?.tdpTransactionType);
+    const rawType = asString(get(["transaction", "transactiontype", "tdptransactiontype", "type", "txntype"]));
+    const mode = asString(get(["mode", "acqmode", "modeofacquisition", "transactionmode"]));
+
     out.push({
       personName,
-      personCategory: optString(row?.personCategory),
+      personCategory: optString(
+        get(["category", "personcategory", "insidercategory", "relationship", "persontype"]),
+      ),
       transactionType: mapTxnType(rawType, mode),
-      securityType: optString(row?.secType),
-      quantity: asNumber(row?.secAcq),
-      value: optNumber(row?.secVal),
-      sharesAfterPct: optNumber(row?.afterAcqSharesPer),
-      mode: optString(row?.acqMode),
-      periodFrom: row?.fromDate ? toIsoDate(asString(row.fromDate)) : undefined,
-      periodTo: row?.toDate ? toIsoDate(asString(row.toDate)) : undefined,
-      disclosureDate: toIsoDate(asString(row?.date) || asString(row?.intimDate) || asString(row?.acqfromDt)),
-      source: "NSE",
+      securityType: optString(get(["securitytype", "sectype", "security", "instrument"])),
+      quantity: asNumber(get(["tradeshares", "shares", "quantity", "secacq", "noofshares", "tradedshares"])),
+      value: optNumber(get(["tradevalue", "value", "secval", "transactionvalue", "tradedvalue"])),
+      sharesAfterPct: optNumber(
+        get(["postholdingpct", "holdingafterpct", "sharesafterpct", "afteracqsharesper", "postpct"]),
+      ),
+      mode: optString(get(["mode", "acqmode", "modeofacquisition", "transactionmode"])),
+      periodFrom: dateOrUndefined(get(["fromdate", "from", "startdate", "acqfromdt"])),
+      periodTo: dateOrUndefined(get(["todate", "to", "enddate", "acqtodt"])),
+      disclosureDate: toIsoDate(
+        asString(get(["broadcastdate", "date", "intimdate", "disclosuredate", "broadcastdt", "announceddate"])),
+      ),
+      source: asString(get(["source", "src", "datasource"])).trim() || "Munshot",
     });
   }
   return out;
