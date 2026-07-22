@@ -143,7 +143,7 @@ export function ShareholdingTrendCard({ state }: { state: PatternState }) {
     <WidgetCard
       title="Promoter / FII / DII Trend"
       subtitle="Quarter-over-quarter composition & change (BSE)"
-      className="span-7"
+      className="span-12"
     >
       <CardStateGate state={state} loadingRows={6}>
         {(pattern) =>

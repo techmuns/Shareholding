@@ -15,11 +15,18 @@ disclosures.
 - **Company-selector home screen** — search by company name or ticker, pick one,
   and it becomes the selected company (held in a React context).
 - **Shareholding dashboard** — the mandatory Munshot 3-zone layout with the
-  selected company in the header ticker pill and four widget cards:
-  - **Shareholding Summary** — KPI row (Promoter / FII·FPI / DII / Public) for the
-    latest quarter with QoQ deltas — wired to BSE.
-  - **Promoter / FII / DII Trend** — an inline-SVG stacked bar chart across the
-    recent quarters — wired to BSE.
+  selected company in the header ticker pill and, pinned to the top, an analytics
+  card over the raw-data cards below it:
+  - **Shareholding Changes** (analytics hero) — the value-over-Screener layer.
+    Instead of making the user scan quarterly tables, it *computes* what moved:
+    the promoter headline (level + QoQ + 1-year Δ + streak + pledge), FII / DII /
+    Public change chips with multi-quarter high/low flags, a promoter change
+    sparkline, one-line rule-based insights (e.g. "FIIs trimmed while DIIs added"),
+    and the biggest named-holder moves (added / trimmed / new / exit). Computed
+    from the same BSE + Munshot feeds the cards below use, so it never disagrees
+    with — or duplicates — the detail it summarizes.
+  - **Promoter / FII / DII Trend** — the quarter-by-quarter composition & change
+    table that substantiates the hero — wired to BSE.
   - **Individual Holders** — tabbed, sortable tables of named Promoter / FII·FPI /
     DII / Other-Public holders (with promoter pledge %) — wired to BSE.
   - **Shareholding Pattern (History)** — the multi-quarter shareholding pattern

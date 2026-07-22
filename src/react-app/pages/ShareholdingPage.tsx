@@ -1,16 +1,18 @@
 // Shareholding dashboard.
 //
-// Every card is wired to live data via the shared dashboard-data store:
-// "Shareholding Summary", "Promoter / FII / DII Trend" and "Individual Holders"
-// from BSE shareholding-pattern feeds; "Insider Trading Disclosures" from the
-// Munshot filings API (SEBI PIT); and "Shareholding Pattern (History)" — the
-// multi-quarter, holder-level pattern parsed from the Munshot combined-financials
-// feed. Each card fetches independently — one failing never blanks the others.
+// The top card, "Shareholding Changes", is the analytics/insight layer — it
+// computes what MOVED (promoter, FII/DII/Public, streaks, pledge, top holder
+// moves, plain-English insights) so users don't have to scan the tables below.
+// Everything under it is the raw detail it summarizes: "Promoter / FII / DII
+// Trend" and "Individual Holders" from BSE; "Shareholding Pattern (History)"
+// from the Munshot combined-financials feed; and "Insider Trading Disclosures"
+// from the Munshot filings API. Each fetches independently — one failing never
+// blanks the others, and no card repeats another's data.
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelectedCompany } from "@/state/selected-company";
 import { useDashboardData } from "@/state/dashboard-data";
-import { ShareholdingSummaryCard } from "@/components/shareholding/ShareholdingSummaryCard";
+import { ShareholdingChangesCard } from "@/components/shareholding/ShareholdingChangesCard";
 import { ShareholdingTrendCard } from "@/components/shareholding/ShareholdingTrendCard";
 import { IndividualHoldersCard } from "@/components/shareholding/IndividualHoldersCard";
 import { InsiderDisclosuresCard } from "@/components/shareholding/InsiderDisclosuresCard";
@@ -40,7 +42,11 @@ export default function ShareholdingPage() {
       </div>
 
       <div className="dash-grid">
-        <ShareholdingSummaryCard state={patternState} />
+        <ShareholdingChangesCard
+          patternState={patternState}
+          holdersState={holdersState}
+          historyState={historyState}
+        />
         <ShareholdingTrendCard state={patternState} />
         <IndividualHoldersCard state={holdersState} />
         <ShareholdingHistoryCard state={historyState} />
