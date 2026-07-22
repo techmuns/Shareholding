@@ -1,4 +1,5 @@
-// POST /api/stock/search — proxy to the upstream Munshot stock search.
+// POST /api/stock/search — proxy to the upstream Munshot stock search
+// (https://birdnest.muns.io/stock/search).
 //
 // Why a proxy: the upstream requires a bearer token that must never reach the
 // browser. The client only sends `{ query }`; the Worker injects the secret and
@@ -15,7 +16,7 @@ import { normalizeStockResults, extractTotalResults } from "@shared/stockSearch"
 import type { StockSearchResponse } from "@shared/types";
 import type { Env } from "../env";
 
-const UPSTREAM_URL = "https://devde.muns.io/stock/search";
+const UPSTREAM_URL = "https://birdnest.muns.io/stock/search";
 /** Fixed constant — the client can never influence this. */
 const USER_INDEX = 124;
 const UPSTREAM_TIMEOUT_MS = 15_000;
@@ -49,7 +50,7 @@ export const stockSearchRoute: Handler = async (c) => {
   }
 
   // ---- Ensure the secret is configured ----------------------------------
-  const token = c.env.MUNS_ACCESS_TOKEN;
+  const token = c.env.MUNS_ACCESS_TOKEN ?? c.env.MUNS_TOKEN;
   if (!token) {
     return json({
       ok: false,
@@ -78,6 +79,7 @@ export const stockSearchRoute: Handler = async (c) => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
+        Accept: "*/*",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query, user_index: USER_INDEX }),

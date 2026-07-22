@@ -1,8 +1,9 @@
 // Pure normalizer helpers for the upstream stock-search payload.
 //
-// The upstream (`https://devde.muns.io/stock/search`) is outside our control,
+// The upstream (`https://birdnest.muns.io/stock/search`) is outside our control,
 // so these helpers must NEVER throw. Malformed entries degrade to empty
-// strings and unknown shapes yield an empty result set.
+// strings and unknown shapes yield an empty result set. A `null` sector (seen
+// in the wild) safely becomes "".
 //
 // Upstream response shape (example query "RELI"):
 //   {
