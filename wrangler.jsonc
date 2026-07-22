@@ -23,8 +23,8 @@
   "kv_namespaces": [
     {
       "binding": "RECENT_KV",
-      "id": "REPLACE_WITH_RECENT_KV_NAMESPACE_ID",
-      "preview_id": "REPLACE_WITH_RECENT_KV_PREVIEW_ID"
+      "id": "ce6c1d7849554f2db5fae5c8b98b1ec1",
+      "preview_id": "ce6c1d7849554f2db5fae5c8b98b1ec1"
     }
   ],
   // SPA served through the Workers Static Assets binding.
