@@ -1,42 +1,34 @@
 // Pure parser for the Munshot `combined_financials` endpoint.
 //
-// The upstream returns a Markdown document (a Screener-style company page):
+// The upstream returns a Markdown company page (a Screener-style report). This is
+// a SHAREHOLDING dashboard, so we extract ONLY the "## Shareholding Pattern"
+// section — a wide table of category subtotals and the named entities under each,
+// across the recent quarters:
 //
-//   # Financial Summary for RELIANCE
-//   ## Pros & Cons
-//   ### Cons
-//   - ...
-//   ## About
-//   Reliance was founded by ...
-//   ## Stock details
-//   - **Market Cap**: ₹ 18,00,089 Cr.
-//   ## Balance Sheet
-//   |  | Mar 2015 | ... |
-//   ## Profit & Loss
-//   ## Quarterly Results
-//   ## Peer Comparison
+//   ## Shareholding Pattern
+//   |  | Sep 2023 | Dec 2023 | ... |
+//   | --- | --- | --- | ... |
+//   | Promoters - | 50.27% | 50.30% | ... |   <- category subtotal
+//   | Srichakra Commercials LLP | 11.19 | 11.20 | ... |   <- named holder
+//   | FIIs - | 22.60% | ... |
+//   | DIIs - | 15.99% | ... |
+//   | Government - | 0.17% | ... |
+//   | Public - | 10.98% | ... |
+//   | No. of Shareholders | 36,98,648 | ... |
 //
 // Everything here is PURE and NEVER throws — a missing or malformed section just
-// yields an empty/undefined value, so odd companies degrade cleanly instead of
-// breaking the card. Shared by BOTH the Worker (to build the API response) and,
-// in tests, directly.
+// yields empty quarters/groups, so odd companies degrade cleanly.
 
 import type {
-  FinancialMetric,
-  FinancialsRow,
-  FinancialsTable,
+  ShareholdingHistoryGroup,
+  ShareholdingHistoryRow,
 } from "./types";
 
-export interface ParsedCombinedFinancials {
+export interface ParsedShareholdingHistory {
   companyName: string;
-  about: string;
-  pros: string[];
-  cons: string[];
-  metrics: FinancialMetric[];
-  profitAndLoss?: FinancialsTable;
-  balanceSheet?: FinancialsTable;
-  quarterly?: FinancialsTable;
-  peers?: FinancialsTable;
+  quarters: string[];
+  groups: ShareholdingHistoryGroup[];
+  shareholders?: ShareholdingHistoryRow;
 }
 
 /**
@@ -90,37 +82,58 @@ function markdownFromJson(value: unknown): string {
   return "";
 }
 
-/** Parse a `combined_financials` Markdown document into a structured shape. */
-export function parseCombinedFinancials(markdown: string): ParsedCombinedFinancials {
+/** Parse a `combined_financials` Markdown document's shareholding pattern. */
+export function parseShareholdingHistory(markdown: string): ParsedShareholdingHistory {
   const { title, sections } = splitSections(markdown ?? "");
 
   const companyName = (title ?? "")
     .replace(/^financial summary for\s+/i, "")
     .trim();
 
-  const metrics = parseKeyValueBullets(findSection(sections, "stock detail"));
-  const { pros, cons } = parseProsCons(findSection(sections, "pros"));
-  const about = joinParagraph(findSection(sections, "about"));
-  const profitAndLoss = parseTable(findSection(sections, "profit"));
-  const balanceSheet = parseTable(findSection(sections, "balance"));
-  const quarterly = parseTable(findSection(sections, "quarter"));
-  const peers = parseTable(findSection(sections, "peer"));
+  const { columns, rows } = parseTable(findSection(sections, "shareholding pattern"));
+  const groups: ShareholdingHistoryGroup[] = [];
+  let shareholders: ShareholdingHistoryRow | undefined;
+  let current: ShareholdingHistoryGroup | undefined;
 
-  return { companyName, about, pros, cons, metrics, profitAndLoss, balanceSheet, quarterly, peers };
+  for (const r of rows) {
+    if (isShareholderCountRow(r.label)) {
+      shareholders = r;
+      continue;
+    }
+    if (isCategoryRow(r.label)) {
+      current = { category: cleanCategory(r.label), subtotal: r.cells, holders: [] };
+      groups.push(current);
+      continue;
+    }
+    // A named holder belongs to the most recent category header seen.
+    if (current) current.holders.push(r);
+  }
+
+  return { companyName, quarters: columns, groups, shareholders };
 }
 
-/** True when the parse produced any usable content (else the route reports not_found). */
-export function hasFinancialsContent(p: ParsedCombinedFinancials): boolean {
-  return (
-    p.metrics.length > 0 ||
-    p.pros.length > 0 ||
-    p.cons.length > 0 ||
-    p.about.length > 0 ||
-    !!p.profitAndLoss ||
-    !!p.balanceSheet ||
-    !!p.quarterly ||
-    !!p.peers
-  );
+/** True when the parse produced a usable shareholding pattern. */
+export function hasShareholdingContent(p: ParsedShareholdingHistory): boolean {
+  return p.quarters.length > 0 && p.groups.length > 0;
+}
+
+// A category subtotal row ends with a dash ("Promoters -", "FIIs -", ...), or is
+// one of the known category names.
+const KNOWN_CATEGORIES = ["promoter", "fii", "dii", "government", "public"];
+
+function isCategoryRow(label: string): boolean {
+  const l = label.trim().toLowerCase();
+  if (/-\s*$/.test(label.trim())) return true;
+  const bare = l.replace(/[-\s]+$/, "").trim();
+  return KNOWN_CATEGORIES.some((k) => bare === k || bare === `${k}s`);
+}
+
+function isShareholderCountRow(label: string): boolean {
+  return /^no\.?\s*of\s*shareholders/i.test(label.trim());
+}
+
+function cleanCategory(label: string): string {
+  return label.replace(/-\s*$/, "").trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -172,61 +185,21 @@ function findSection(sections: Map<string, string[]>, ...keys: string[]): string
 }
 
 // ---------------------------------------------------------------------------
-// Block parsers
+// Table parsing
 // ---------------------------------------------------------------------------
 
-/** "- **Market Cap**: ₹ 18,00,089 Cr." -> { label: "Market Cap", value: "₹ 18,00,089 Cr." } */
-function parseKeyValueBullets(lines: string[]): FinancialMetric[] {
-  const out: FinancialMetric[] = [];
-  for (const line of lines) {
-    const m = /^\s*[-*]\s+\*\*(.+?)\*\*\s*:?\s*(.*)$/.exec(line);
-    if (m) {
-      const label = m[1].trim();
-      const value = m[2].trim();
-      if (label) out.push({ label, value });
-    }
-  }
-  return out;
+interface ParsedTable {
+  columns: string[];
+  rows: ShareholdingHistoryRow[];
 }
 
-/** Split a "Pros & Cons" block by its "### Pros" / "### Cons" sub-headings. */
-function parseProsCons(lines: string[]): { pros: string[]; cons: string[] } {
-  const pros: string[] = [];
-  const cons: string[] = [];
-  let mode: "pros" | "cons" | null = null;
-
-  for (const line of lines) {
-    const h3 = /^###\s+(.*)$/.exec(line);
-    if (h3) {
-      const t = h3[1].toLowerCase();
-      mode = t.includes("pro") ? "pros" : t.includes("con") ? "cons" : null;
-      continue;
-    }
-    const b = /^\s*[-*]\s+(.*)$/.exec(line);
-    if (b && mode) {
-      const text = b[1].trim();
-      if (text) (mode === "pros" ? pros : cons).push(text);
-    }
-  }
-  return { pros, cons };
-}
-
-/** Collapse a block of lines into a single trimmed paragraph. */
-function joinParagraph(lines: string[]): string {
-  return lines
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-}
-
-/** Parse a GitHub-flavored Markdown table into columns + labeled rows. */
-function parseTable(lines: string[]): FinancialsTable | undefined {
+/** Parse a GitHub-flavored Markdown table into quarter columns + labeled rows. */
+function parseTable(lines: string[]): ParsedTable {
   const tableLines = lines.filter((l) => l.trim().startsWith("|"));
-  if (tableLines.length < 2) return undefined;
+  if (tableLines.length < 2) return { columns: [], rows: [] };
 
   const header = splitCells(tableLines[0]);
-  if (header.length < 2) return undefined;
+  if (header.length < 2) return { columns: [], rows: [] };
 
   // A second row of only dashes/colons/pipes is the header separator — skip it.
   let dataStart = 1;
@@ -235,7 +208,7 @@ function parseTable(lines: string[]): FinancialsTable | undefined {
   }
 
   const columns = header.slice(1); // first header cell labels the row column
-  const rows: FinancialsRow[] = [];
+  const rows: ShareholdingHistoryRow[] = [];
 
   for (let i = dataStart; i < tableLines.length; i++) {
     const cells = splitCells(tableLines[i]);
@@ -244,13 +217,10 @@ function parseTable(lines: string[]): FinancialsTable | undefined {
     const rest = cells.slice(1);
     // Normalize row width to the column count (pad short, drop overflow).
     const norm =
-      rest.length === columns.length
-        ? rest
-        : columns.map((_, idx) => rest[idx] ?? "");
+      rest.length === columns.length ? rest : columns.map((_, idx) => rest[idx] ?? "");
     rows.push({ label, cells: norm });
   }
 
-  if (rows.length === 0) return undefined;
   return { columns, rows };
 }
 

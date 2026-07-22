@@ -37,7 +37,7 @@ export function Header() {
       pattern: data.patternState.status === "done" ? data.patternState.pattern : undefined,
       holders: data.holdersState.status === "done" ? data.holdersState.holders : undefined,
       insider: data.insiderState.status === "done" ? data.insiderState.insider : undefined,
-      financials: data.financialsState.status === "done" ? data.financialsState.financials : undefined,
+      history: data.historyState.status === "done" ? data.historyState.history : undefined,
     });
     downloadCsv(exportFilename(company, generatedAt), csv);
   };

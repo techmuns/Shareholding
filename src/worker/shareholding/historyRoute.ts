@@ -1,25 +1,26 @@
-// POST /api/financials/combined — company fundamentals & financial statements.
+// POST /api/shareholding/history — shareholding-pattern history.
 //
-// Body: { ticker (or symbol), country?, q?, period?, name? }. Sourced from the
-// Munshot filings API (token-authenticated, same host/token as the search):
+// Body: { ticker (or symbol), country?, name? }. Sourced from the Munshot
+// combined-financials feed (token-authenticated, same host/token as the search):
 //   POST https://devde.muns.io/filings/combined_financials
 //        { ticker, country, q, period }
 // with `Authorization: Bearer <MUNS token>`. The upstream returns a Markdown
-// document which we parse into a structured shape (pure, never throws).
+// company page; we parse ONLY its "Shareholding Pattern" section into a
+// structured shape (category subtotals + named holders across recent quarters).
 //
 // Safe-failure contract (HTTP 200):
 //   - missing token          -> not_configured
 //   - missing ticker         -> invalid_request
-//   - reachable, no content  -> not_found      (rendered as a clean empty state)
+//   - reachable, no pattern  -> not_found       (rendered as a clean empty state)
 //   - upstream unreachable    -> timeout / upstream_error / provider_error
 // Never log the token, the Authorization header, or the upstream body.
 
 import type { Context } from "hono";
-import type { CombinedFinancialsResponse } from "@shared/types";
+import type { ShareholdingHistoryResponse } from "@shared/types";
 import {
   coerceMarkdown,
-  hasFinancialsContent,
-  parseCombinedFinancials,
+  hasShareholdingContent,
+  parseShareholdingHistory,
 } from "@shared/combinedFinancials";
 import type { Env } from "../env";
 import { bodyString, clientSignalOf } from "../bse/client";
@@ -28,14 +29,16 @@ type Handler = (c: Context<{ Bindings: Env }>) => Promise<Response>;
 
 const UPSTREAM_URL = "https://devde.muns.io/filings/combined_financials";
 const UPSTREAM_TIMEOUT_MS = 20_000;
-const NOTE = "Fundamentals & financial statements · via Munshot";
+const NOTE = "Shareholding pattern history · via Munshot";
 const SOURCE = "Munshot";
 const DEFAULT_COUNTRY = "India";
-const DEFAULT_BASIS = "consolidated";
-const DEFAULT_PERIOD = "annual";
+// The upstream requires these; shareholding is the same regardless, so we fix
+// them and only surface the pattern section.
+const BASIS = "consolidated";
+const PERIOD = "annual";
 
-export const combinedFinancialsRoute: Handler = async (c) => {
-  const json = (body: CombinedFinancialsResponse) => c.json(body);
+export const shareholdingHistoryRoute: Handler = async (c) => {
+  const json = (body: ShareholdingHistoryResponse) => c.json(body);
   const clientSignal = clientSignalOf(c.req.raw);
 
   let payload: unknown;
@@ -46,12 +49,10 @@ export const combinedFinancialsRoute: Handler = async (c) => {
   }
 
   const body = payload as
-    | { ticker?: unknown; symbol?: unknown; country?: unknown; q?: unknown; period?: unknown; name?: unknown }
+    | { ticker?: unknown; symbol?: unknown; country?: unknown; name?: unknown }
     | null;
   const ticker = bodyString(body?.ticker) || bodyString(body?.symbol);
   const country = bodyString(body?.country) || DEFAULT_COUNTRY;
-  const basis = bodyString(body?.q) || DEFAULT_BASIS;
-  const period = bodyString(body?.period) || DEFAULT_PERIOD;
   const nameHint = bodyString(body?.name);
 
   if (!ticker) {
@@ -63,7 +64,7 @@ export const combinedFinancialsRoute: Handler = async (c) => {
     return json({
       ok: false,
       code: "not_configured",
-      message: "Financials aren't configured yet. Set the MUNS_ACCESS_TOKEN secret to enable them.",
+      message: "Shareholding history isn't configured yet. Set the MUNS_ACCESS_TOKEN secret to enable it.",
     });
   }
 
@@ -87,19 +88,19 @@ export const combinedFinancialsRoute: Handler = async (c) => {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ticker, country, q: basis, period }),
+      body: JSON.stringify({ ticker, country, q: BASIS, period: PERIOD }),
       signal: controller.signal,
     });
 
     if (!upstream.ok) {
-      // A 404 upstream means "no fundamentals for this company", not an outage.
+      // A 404 upstream means "no data for this company", not an outage.
       if (upstream.status === 404) {
-        return json({ ok: false, code: "not_found", message: "No financial data for this company." });
+        return json({ ok: false, code: "not_found", message: "No shareholding data for this company." });
       }
       return json({
         ok: false,
         code: "upstream_error",
-        message: "The financials provider is temporarily unavailable. Please try again.",
+        message: "The shareholding provider is temporarily unavailable. Please try again.",
       });
     }
 
@@ -110,15 +111,15 @@ export const combinedFinancialsRoute: Handler = async (c) => {
       return json({
         ok: false,
         code: "provider_error",
-        message: "The financials provider returned an unreadable response.",
+        message: "The shareholding provider returned an unreadable response.",
       });
     }
 
     const markdown = coerceMarkdown(text);
-    const parsed = parseCombinedFinancials(markdown);
+    const parsed = parseShareholdingHistory(markdown);
 
-    if (!hasFinancialsContent(parsed)) {
-      return json({ ok: false, code: "not_found", message: "No financial data for this company." });
+    if (!hasShareholdingContent(parsed)) {
+      return json({ ok: false, code: "not_found", message: "No shareholding data for this company." });
     }
 
     return json({
@@ -126,16 +127,9 @@ export const combinedFinancialsRoute: Handler = async (c) => {
       symbol: ticker,
       companyName: parsed.companyName || nameHint || ticker,
       asOf: new Date().toISOString(),
-      basis,
-      period,
-      about: parsed.about,
-      pros: parsed.pros,
-      cons: parsed.cons,
-      metrics: parsed.metrics,
-      profitAndLoss: parsed.profitAndLoss,
-      balanceSheet: parsed.balanceSheet,
-      quarterly: parsed.quarterly,
-      peers: parsed.peers,
+      quarters: parsed.quarters,
+      groups: parsed.groups,
+      shareholders: parsed.shareholders,
       source: SOURCE,
       note: NOTE,
     });
@@ -144,8 +138,8 @@ export const combinedFinancialsRoute: Handler = async (c) => {
       ok: false,
       code: timedOut ? "timeout" : "provider_error",
       message: timedOut
-        ? "Financials took too long to respond. Please try again."
-        : "Could not reach the financials provider. Please try again.",
+        ? "Shareholding history took too long to respond. Please try again."
+        : "Could not reach the shareholding provider. Please try again.",
     });
   } finally {
     clearTimeout(timer);

@@ -18,8 +18,8 @@ export function CaptureHandlers() {
     const pattern = data.patternState.status === "done" ? data.patternState.pattern : undefined;
     const holders = data.holdersState.status === "done" ? data.holdersState.holders : undefined;
     const insider = data.insiderState.status === "done" ? data.insiderState.insider : undefined;
-    const financials =
-      data.financialsState.status === "done" ? data.financialsState.financials : undefined;
+    const history =
+      data.historyState.status === "done" ? data.historyState.history : undefined;
 
     return {
       context: {
@@ -29,7 +29,7 @@ export function CaptureHandlers() {
           pattern?.companyName ??
           holders?.companyName ??
           insider?.companyName ??
-          financials?.companyName ??
+          history?.companyName ??
           null,
         scripCode: pattern?.scripCode ?? holders?.scripCode ?? insider?.scripCode ?? null,
         quarter: pattern?.latest.qtrLabel ?? holders?.qtrLabel ?? null,
@@ -45,7 +45,7 @@ export function CaptureHandlers() {
         ...(pattern ? { pattern } : {}),
         ...(holders ? { holders } : {}),
         ...(insider ? { insider } : {}),
-        ...(financials ? { financials } : {}),
+        ...(history ? { shareholdingHistory: history } : {}),
       },
     };
   };

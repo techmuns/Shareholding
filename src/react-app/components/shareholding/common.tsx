@@ -3,9 +3,9 @@
 import type { ReactNode } from "react";
 import { Landmark } from "lucide-react";
 import type {
-  CombinedFinancialsSuccess,
   HoldersSuccess,
   InsiderSuccess,
+  ShareholdingHistorySuccess,
   ShareholdingPatternSuccess,
 } from "@shared/types";
 import { EmptyState, ErrorState, LoadingSkeleton } from "@/components/ui/states";
@@ -25,10 +25,10 @@ export type HoldersState = NonDoneStatus | { status: "done"; holders: HoldersSuc
 /** State for the insider-disclosures card (its own fetch). */
 export type InsiderState = NonDoneStatus | { status: "done"; insider: InsiderSuccess };
 
-/** State for the combined-financials cards (its own fetch). */
-export type FinancialsState =
+/** State for the shareholding-history card (its own fetch). */
+export type ShareholdingHistoryCardState =
   | NonDoneStatus
-  | { status: "done"; financials: CombinedFinancialsSuccess };
+  | { status: "done"; history: ShareholdingHistorySuccess };
 
 /** Treat empty/unknown as India (so we still try); only skip clearly non-Indian. */
 export function isIndiaCountry(country: string): boolean {
@@ -93,18 +93,18 @@ export function InsiderStateGate({
   return <>{children(state.insider)}</>;
 }
 
-/** Same gate, for the combined-financials cards. */
-export function FinancialsStateGate({
+/** Same gate, for the shareholding-history card. */
+export function ShareholdingHistoryStateGate({
   state,
   loadingRows = 6,
   children,
 }: {
-  state: FinancialsState;
+  state: ShareholdingHistoryCardState;
   loadingRows?: number;
-  children: (financials: CombinedFinancialsSuccess) => ReactNode;
+  children: (history: ShareholdingHistorySuccess) => ReactNode;
 }) {
   if (state.status !== "done") return <NonDoneView state={state} loadingRows={loadingRows} />;
-  return <>{children(state.financials)}</>;
+  return <>{children(state.history)}</>;
 }
 
 export function formatAsOf(iso: string): string {

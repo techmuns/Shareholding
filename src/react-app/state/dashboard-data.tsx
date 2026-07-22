@@ -18,17 +18,17 @@ import {
 } from "react";
 import type { HolderCategory } from "@shared/types";
 import {
-  getCombinedFinancials,
   getInsiderDisclosures,
+  getShareholdingHistory,
   getShareholdingHolders,
   getShareholdingPattern,
 } from "@/lib/api";
 import {
   isIndiaCountry,
-  type FinancialsState,
   type HoldersState,
   type InsiderState,
   type PatternState,
+  type ShareholdingHistoryCardState,
 } from "@/components/shareholding/common";
 import { useSelectedCompany } from "@/state/selected-company";
 
@@ -41,7 +41,7 @@ interface DashboardData {
   patternState: PatternState;
   holdersState: HoldersState;
   insiderState: InsiderState;
-  financialsState: FinancialsState;
+  historyState: ShareholdingHistoryCardState;
   isRefreshing: boolean;
   lastRefreshed: string | null; // ISO
   refresh: () => void;
@@ -64,7 +64,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const [patternState, setPatternState] = useState<PatternState>(LOADING);
   const [holdersState, setHoldersState] = useState<HoldersState>(LOADING);
   const [insiderState, setInsiderState] = useState<InsiderState>(LOADING);
-  const [financialsState, setFinancialsState] = useState<FinancialsState>(LOADING);
+  const [historyState, setHistoryState] = useState<ShareholdingHistoryCardState>(LOADING);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -79,7 +79,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       setPatternState(LOADING);
       setHoldersState(LOADING);
       setInsiderState(LOADING);
-      setFinancialsState(LOADING);
+      setHistoryState(LOADING);
       lastKeyRef.current = null;
       return;
     }
@@ -94,7 +94,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       setPatternState({ status: "unavailable" });
       setHoldersState({ status: "unavailable" });
       setInsiderState({ status: "unavailable" });
-      setFinancialsState({ status: "unavailable" });
+      setHistoryState({ status: "unavailable" });
       setLastRefreshed(new Date().toISOString());
       return;
     }
@@ -105,7 +105,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       setPatternState(LOADING);
       setHoldersState(LOADING);
       setInsiderState(LOADING);
-      setFinancialsState(LOADING);
+      setHistoryState(LOADING);
     }
 
     const controller = new AbortController();
@@ -150,22 +150,22 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       }
     })();
 
-    const pFinancials = (async () => {
+    const pHistory = (async () => {
       try {
-        const res = await getCombinedFinancials(
+        const res = await getShareholdingHistory(
           { ticker: company.ticker, country: company.country, name: company.name },
           controller.signal,
         );
         if (controller.signal.aborted) return;
-        if (res.ok) setFinancialsState({ status: "done", financials: res });
-        else if (res.code === "not_found") setFinancialsState({ status: "unavailable" });
-        else setFinancialsState({ status: "error", message: res.message });
+        if (res.ok) setHistoryState({ status: "done", history: res });
+        else if (res.code === "not_found") setHistoryState({ status: "unavailable" });
+        else setHistoryState({ status: "error", message: res.message });
       } catch {
         /* aborted */
       }
     })();
 
-    Promise.allSettled([pPattern, pHolders, pInsider, pFinancials]).then(() => {
+    Promise.allSettled([pPattern, pHolders, pInsider, pHistory]).then(() => {
       if (controller.signal.aborted) return;
       setIsRefreshing(false);
       setLastRefreshed(new Date().toISOString());
@@ -179,12 +179,12 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
       patternState.status === "done" ||
       holdersState.status === "done" ||
       insiderState.status === "done" ||
-      financialsState.status === "done";
+      historyState.status === "done";
     return {
       patternState,
       holdersState,
       insiderState,
-      financialsState,
+      historyState,
       isRefreshing,
       lastRefreshed,
       refresh: () => setRefreshNonce((n) => n + 1),
@@ -198,7 +198,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     patternState,
     holdersState,
     insiderState,
-    financialsState,
+    historyState,
     isRefreshing,
     lastRefreshed,
     holdersTab,

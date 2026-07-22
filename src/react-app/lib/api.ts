@@ -1,9 +1,9 @@
 // Frontend API client for the Worker proxy.
 import type {
   BseResolveResponse,
-  CombinedFinancialsResponse,
   HoldersResponse,
   InsiderResponse,
+  ShareholdingHistoryResponse,
   ShareholdingPatternResponse,
   StockSearchResponse,
 } from "@shared/types";
@@ -142,28 +142,28 @@ export async function getInsiderDisclosures(
 }
 
 /**
- * POST /api/financials/combined — company fundamentals & financial statements
- * via the Munshot filings API. Accepts the ticker, country, statement basis
- * (`q`: consolidated/standalone) and reporting period (annual/quarterly).
+ * POST /api/shareholding/history — shareholding-pattern history (category
+ * subtotals + named holders across recent quarters) parsed from the Munshot
+ * combined-financials feed. Accepts the ticker and country.
  */
-export async function getCombinedFinancials(
-  input: { ticker?: string; symbol?: string; country?: string; q?: string; period?: string; name?: string },
+export async function getShareholdingHistory(
+  input: { ticker?: string; symbol?: string; country?: string; name?: string },
   signal?: AbortSignal,
-): Promise<CombinedFinancialsResponse> {
+): Promise<ShareholdingHistoryResponse> {
   try {
-    const res = await fetch("/api/financials/combined", {
+    const res = await fetch("/api/shareholding/history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
       signal,
     });
-    return (await res.json()) as CombinedFinancialsResponse;
+    return (await res.json()) as ShareholdingHistoryResponse;
   } catch (err) {
     if (signal?.aborted) throw err;
     return {
       ok: false,
       code: "provider_error",
-      message: "Could not reach the financials service. Please try again.",
+      message: "Could not reach the shareholding service. Please try again.",
     };
   }
 }

@@ -66,13 +66,13 @@ function SourceTile({
 }
 
 export function DataSourcesFooter() {
-  const { patternState, holdersState, insiderState, financialsState, lastRefreshed } =
+  const { patternState, holdersState, insiderState, historyState, lastRefreshed } =
     useDashboardData();
 
   const pattern = patternState.status === "done" ? patternState.pattern : undefined;
   const holders = holdersState.status === "done" ? holdersState.holders : undefined;
   const insider = insiderState.status === "done" ? insiderState.insider : undefined;
-  const financials = financialsState.status === "done" ? financialsState.financials : undefined;
+  const history = historyState.status === "done" ? historyState.history : undefined;
 
   const patternDetail = pattern
     ? `BSE India · shareholding pattern · as of ${pattern.latest.qtrLabel}`
@@ -92,9 +92,13 @@ export function DataSourcesFooter() {
     insiderDetail = "SEBI PIT insider dealings · via Munshot filings API";
   }
 
-  const financialsDetail = financials
-    ? `Munshot · fundamentals & statements · ${financials.basis} · ${financials.period}`
-    : "Munshot · fundamentals & financial statements";
+  const historyDetail = history
+    ? `Munshot · shareholding pattern${
+        history.quarters.length > 0
+          ? ` · ${history.quarters[0]} – ${history.quarters[history.quarters.length - 1]}`
+          : ""
+      }`
+    : "Munshot · shareholding pattern history";
 
   const refreshedWhen = lastRefreshed ? formatAsOf(lastRefreshed) : "—";
 
@@ -113,8 +117,8 @@ export function DataSourcesFooter() {
         }}
       >
         <SourceTile title="Summary & Trend" detail={patternDetail} status={patternState.status} />
-        <SourceTile title="Fundamentals & Statements" detail={financialsDetail} status={financialsState.status} />
         <SourceTile title="Individual Holders" detail={holdersDetail} status={holdersState.status} />
+        <SourceTile title="Pattern History" detail={historyDetail} status={historyState.status} />
         <SourceTile title="Insider Disclosures" detail={insiderDetail} status={insiderState.status} />
       </div>
       <div

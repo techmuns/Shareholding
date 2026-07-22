@@ -1,11 +1,10 @@
 // CSV export — a single, self-explanatory .csv with clearly-labeled sections.
 // No new dependencies; proper RFC-4180-style escaping.
 import type {
-  CombinedFinancialsSuccess,
-  FinancialsTable,
   HoldersSuccess,
   InsiderSuccess,
   SelectedCompany,
+  ShareholdingHistorySuccess,
   ShareholdingPatternSuccess,
 } from "@shared/types";
 import { publicFloatPct } from "@shared/bseShareholding";
@@ -31,18 +30,7 @@ export interface DashboardExportInput {
   pattern?: ShareholdingPatternSuccess;
   holders?: HoldersSuccess;
   insider?: InsiderSuccess;
-  financials?: CombinedFinancialsSuccess;
-}
-
-/** Emit a labeled financial-statement table as CSV rows (header + data rows). */
-function pushTable(lines: string[], heading: string, table: FinancialsTable | undefined): void {
-  if (!table || table.rows.length === 0) return;
-  lines.push(row(`## ${heading}`));
-  lines.push(row("", ...table.columns));
-  for (const r of table.rows) {
-    lines.push(row(r.label, ...table.columns.map((_, i) => r.cells[i] ?? "")));
-  }
-  lines.push("");
+  history?: ShareholdingHistorySuccess;
 }
 
 /**
@@ -50,7 +38,7 @@ function pushTable(lines: string[], heading: string, table: FinancialsTable | un
  * loaded card. Sections that didn't load are simply omitted.
  */
 export function buildDashboardCsv(input: DashboardExportInput): string {
-  const { company, generatedAt, pattern, holders, insider, financials } = input;
+  const { company, generatedAt, pattern, holders, insider, history } = input;
   const lines: string[] = [];
 
   // ---- Stamp -------------------------------------------------------------
@@ -157,29 +145,22 @@ export function buildDashboardCsv(input: DashboardExportInput): string {
     lines.push("");
   }
 
-  // ---- Fundamentals & financial statements ------------------------------
-  if (financials) {
-    if (financials.metrics.length > 0) {
-      lines.push(row("## Key Metrics"));
-      lines.push(row("Metric", "Value"));
-      for (const m of financials.metrics) lines.push(row(m.label, m.value));
-      lines.push("");
+  // ---- Shareholding Pattern (history, via Munshot) ----------------------
+  if (history && history.groups.length > 0) {
+    lines.push(row("## Shareholding Pattern History (Munshot)"));
+    lines.push(row("Holder / Category", ...history.quarters));
+    for (const g of history.groups) {
+      lines.push(row(g.category, ...history.quarters.map((_, i) => g.subtotal[i] ?? "")));
+      for (const h of g.holders) {
+        lines.push(row(`  ${h.label}`, ...history.quarters.map((_, i) => h.cells[i] ?? "")));
+      }
     }
-    if (financials.pros.length > 0 || financials.cons.length > 0) {
-      lines.push(row("## Highlights"));
-      for (const p of financials.pros) lines.push(row("Pro", p));
-      for (const cn of financials.cons) lines.push(row("Con", cn));
-      lines.push("");
+    if (history.shareholders) {
+      lines.push(
+        row(history.shareholders.label, ...history.quarters.map((_, i) => history.shareholders!.cells[i] ?? "")),
+      );
     }
-    if (financials.about) {
-      lines.push(row("## About"));
-      lines.push(row(financials.about));
-      lines.push("");
-    }
-    pushTable(lines, "Profit & Loss", financials.profitAndLoss);
-    pushTable(lines, "Balance Sheet", financials.balanceSheet);
-    pushTable(lines, "Quarterly Results", financials.quarterly);
-    pushTable(lines, "Peer Comparison", financials.peers);
+    lines.push("");
   }
 
   return lines.join("\r\n");

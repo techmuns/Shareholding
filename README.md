@@ -7,8 +7,8 @@ disclosures.
 
 > The company selector and 3-zone shell are in place, and every card is wired to
 > live data: **Shareholding Summary**, **Promoter / FII / DII Trend** and
-> **Individual Holders** from BSE; **Insider Trading Disclosures**, **Company
-> Fundamentals** and **Financial Statements** from the Munshot filings APIs.
+> **Individual Holders** from BSE; **Insider Trading Disclosures** and
+> **Shareholding Pattern (History)** from the Munshot filings APIs.
 
 ## What's here today
 
@@ -20,15 +20,12 @@ disclosures.
     latest quarter with QoQ deltas — wired to BSE.
   - **Promoter / FII / DII Trend** — an inline-SVG stacked bar chart across the
     recent quarters — wired to BSE.
-  - **Company Fundamentals** — key stock metrics (Market Cap, P/E, ROE, ROCE,
-    Book Value, Dividend Yield, Face Value, 52w High/Low), analyst pros/cons
-    highlights and the company profile — wired to the Munshot combined-financials
-    feed.
-  - **Financial Statements** — tabbed, period-wide tables (Profit & Loss, Balance
-    Sheet, Quarterly Results, Peer Comparison) with a sticky label column — wired
-    to the Munshot combined-financials feed.
   - **Individual Holders** — tabbed, sortable tables of named Promoter / FII·FPI /
     DII / Other-Public holders (with promoter pledge %) — wired to BSE.
+  - **Shareholding Pattern (History)** — the multi-quarter shareholding pattern
+    from the Munshot combined-financials feed: category subtotals (Promoters /
+    FIIs / DIIs / Government / Public) with the named entities disclosed under
+    each, in a collapsible, period-wide table.
   - **Insider Trading Disclosures** — sortable table of SEBI PIT insider dealings
     with buy/sell/pledge chips — wired to the Munshot filings API (Trendlyne).
 - **Embeddability & polish** (works standalone or embedded in Munshot):
@@ -62,11 +59,11 @@ disclosures.
     FII/FPI, DII, other public) for the latest quarter, with promoter pledge %.
   - `POST /api/insider/disclosures` — SEBI PIT insider-trading disclosures from
     the token-authenticated Munshot filings API (`filings/data/insider_trades`).
-  - `POST /api/financials/combined` — company fundamentals & financial statements
-    from the token-authenticated Munshot filings API (`filings/combined_financials`).
-    The upstream returns a Markdown company page; the Worker parses it into a
-    structured shape (metrics, pros/cons, about, and P&L / Balance Sheet /
-    Quarterly / Peer tables).
+  - `POST /api/shareholding/history` — the multi-quarter shareholding pattern
+    (category subtotals + named holders) parsed from the Munshot combined-
+    financials feed (`filings/combined_financials`). The upstream returns a
+    Markdown company page; the Worker uses only its "Shareholding Pattern"
+    section and ignores the rest.
 
 ## Tech stack
 
@@ -179,7 +176,7 @@ No secret values live in the repo. `.dev.vars` is git-ignored; only
 | POST   | `/api/shareholding/pattern` | Body `{ scripCode }` or `{ query/ticker/name }` → pattern.   |
 | POST   | `/api/shareholding/holders` | Body `{ scripCode }` or `{ query/ticker/name }` (+ `qtrId?`) → holders. |
 | POST   | `/api/insider/disclosures`  | Body `{ ticker, country?, name? }` → SEBI PIT insider trades (Munshot). |
-| POST   | `/api/financials/combined`  | Body `{ ticker, country?, q?, period?, name? }` → fundamentals & statements (Munshot). |
+| POST   | `/api/shareholding/history` | Body `{ ticker, country?, name? }` → multi-quarter shareholding pattern (Munshot). |
 
 All POST routes use the safe-failure contract (always HTTP 200; success is
 `{ ok:true, ... }`, failures are `{ ok:false, code, message }`).
@@ -208,13 +205,14 @@ Trade Value / Post-Holding % / Mode / Broadcast Date / Source, e.g. Trendlyne).
 The token is read from `MUNS_ACCESS_TOKEN` (or `MUNS_TOKEN`); with no token the
 insider card shows a `not_configured` state while the BSE cards still load.
 
-**Fundamentals & financial statements** come from the same Munshot filings host:
+**Shareholding pattern history** comes from the same Munshot filings host:
 `POST https://devde.muns.io/filings/combined_financials` with body
-`{ ticker, country, q, period }` (`q` = `consolidated`/`standalone`, `period` =
-`annual`/`quarterly`) and `Authorization: Bearer <MUNS token>`. The upstream
-returns a Markdown company page (stock metrics, pros/cons, profile, and the
-Profit & Loss / Balance Sheet / Quarterly / Peer tables); the Worker parses it
-server-side into a structured JSON response. Same token rules as above.
+`{ ticker, country, q, period }` and `Authorization: Bearer <MUNS token>`. That
+endpoint returns a full Markdown company page, but this is a shareholding
+dashboard, so the Worker parses and returns **only** its "Shareholding Pattern"
+section — the category subtotals (Promoters / FIIs / DIIs / Government / Public)
+and the named entities under each, across the recent quarters. Same token rules
+as above.
 
 Non-Indian (non-BSE) companies resolve to `not_found`, which the UI renders as a
 clean "not available" empty state.
@@ -232,11 +230,12 @@ Non-`/api` routes are served by the SPA (Static Assets fallback).
   token-authenticated so it isn't IP-blocked like the exchanges. The normalizer
   matches fields defensively (works whether the API returns display labels,
   snake_case, or a columns+rows table) and never throws.
-- **Fundamentals & financial statements come from the Munshot combined-financials
-  API**, which returns a Markdown company page. The parser is pure and never
-  throws — it tolerates the body arriving as raw Markdown, a bare JSON string, or
-  JSON wrapping the Markdown, and a missing section simply renders as absent
-  rather than breaking the card.
+- **The shareholding pattern history comes from the Munshot combined-financials
+  API**, which returns a Markdown company page. Only its "Shareholding Pattern"
+  section is used; the fundamentals / P&L / balance-sheet / peer sections are
+  intentionally ignored. The parser is pure and never throws — it tolerates the
+  body arriving as raw Markdown, a bare JSON string, or JSON wrapping the
+  Markdown, and a missing section degrades to a clean "not available" state.
 - **Coverage is BSE-listed Indian companies** for the pattern/holders cards;
   non-Indian tickers surface the clean "not available" state, not an error.
 - **Disclosure thresholds are BSE's:** individual public/institutional holders
