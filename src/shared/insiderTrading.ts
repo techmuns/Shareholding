@@ -166,6 +166,76 @@ function dateOrUndefined(value: unknown): string | undefined {
   return s ? toIsoDate(s) : undefined;
 }
 
+/** Split a Markdown table row into trimmed cell values (drops the outer pipes). */
+function splitMdCells(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
+}
+
+/** Zip one contiguous Markdown table block (lines starting with "|") into objects. */
+function tableBlockToObjects(block: string[]): Record<string, unknown>[] {
+  if (block.length < 2) return [];
+  const header = splitMdCells(block[0]);
+  if (header.length < 2) return [];
+
+  // A row of only dashes/colons/pipes is the header separator — skip it.
+  let start = 1;
+  if (block[1] && /^[\s|:-]+$/.test(block[1]) && block[1].includes("-")) start = 2;
+
+  const out: Record<string, unknown>[] = [];
+  for (let i = start; i < block.length; i++) {
+    const cells = splitMdCells(block[i]);
+    if (cells.every((c) => c === "")) continue;
+    const obj: Record<string, unknown> = {};
+    header.forEach((h, idx) => {
+      obj[h || `col${idx}`] = cells[idx] ?? "";
+    });
+    out.push(obj);
+  }
+  return out;
+}
+
+/**
+ * Parse insider rows from a Markdown document (the `insider_trades` endpoint
+ * returns a Markdown table, not JSON). Finds every contiguous table block and
+ * returns the best candidate — an insider-shaped header wins, else the largest.
+ * Keys rows by the raw header text; `normalizeMunshotInsider` normalizes them.
+ * Never throws.
+ */
+export function parseInsiderMarkdownRows(markdown: string): Record<string, unknown>[] {
+  const lines = (markdown ?? "").split(/\r?\n/);
+  const blocks: string[][] = [];
+  let cur: string[] = [];
+  for (const line of lines) {
+    if (line.trim().startsWith("|")) {
+      cur.push(line);
+    } else if (cur.length) {
+      blocks.push(cur);
+      cur = [];
+    }
+  }
+  if (cur.length) blocks.push(cur);
+
+  let best: Record<string, unknown>[] = [];
+  let bestScore = -1;
+  for (const block of blocks) {
+    const rows = tableBlockToObjects(block);
+    if (rows.length === 0) continue;
+    const headerKeys = Object.keys(rows[0]).map(normKey);
+    const insiderish = headerKeys.some(
+      (k) => k.includes("insider") || k.includes("transaction") || k.includes("tradeshares"),
+    );
+    const score = rows.length + (insiderish ? 100000 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = rows;
+    }
+  }
+  return best;
+}
+
 /**
  * Normalize the Munshot `insider_trades` payload into InsiderTrade[]. Matches
  * fields by normalized-key aliases so it works whether the API returns display

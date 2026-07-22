@@ -14,7 +14,13 @@
 
 import type { Context } from "hono";
 import type { InsiderResponse, InsiderSource, InsiderTrade } from "@shared/types";
-import { mergeInsiderTrades, normalizeMunshotInsider, parseInsiderDateMs } from "@shared/insiderTrading";
+import {
+  mergeInsiderTrades,
+  normalizeMunshotInsider,
+  parseInsiderDateMs,
+  parseInsiderMarkdownRows,
+} from "@shared/insiderTrading";
+import { coerceMarkdown } from "@shared/combinedFinancials";
 import type { Env } from "../env";
 import { bodyString, clientSignalOf } from "../bse/client";
 
@@ -91,9 +97,9 @@ export const insiderDisclosuresRoute: Handler = async (c) => {
       });
     }
 
-    let raw: unknown;
+    let text: string;
     try {
-      raw = await upstream.json();
+      text = await upstream.text();
     } catch {
       return json({
         ok: false,
@@ -102,8 +108,21 @@ export const insiderDisclosuresRoute: Handler = async (c) => {
       });
     }
 
-    // Normalize, dedupe, sort newest-first (wide window = no date filtering), cap.
-    const all = normalizeMunshotInsider(raw);
+    // The endpoint may return JSON OR a Markdown table. Try JSON first; if that
+    // yields no rows, fall back to parsing a Markdown table (raw, or wrapped in
+    // a JSON string/field). Both paths feed the same defensive normalizer.
+    let all: InsiderTrade[] = [];
+    let jsonRaw: unknown;
+    try {
+      jsonRaw = JSON.parse(text);
+    } catch {
+      /* not JSON — handled by the Markdown fallback below */
+    }
+    if (jsonRaw !== undefined) all = normalizeMunshotInsider(jsonRaw);
+    if (all.length === 0) {
+      const md = coerceMarkdown(text);
+      if (md) all = normalizeMunshotInsider(parseInsiderMarkdownRows(md));
+    }
     const sorted = mergeInsiderTrades(all, 0, Number.MAX_SAFE_INTEGER);
     const trades: InsiderTrade[] = sorted.slice(0, MAX_TRADES);
 
